@@ -12,8 +12,17 @@ st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="
 CHAVE_SERPER_PADRAO = "902a25118f1f65d63bef8f294d747d3624642da1"
 CHAVE_GEMINI_PADRAO = "AIzaSyBdl3YB9EvQjYz_NjvGQs4wSzXn7Q4qNOQ"
 
-st.title("⚡ Qualificador e Gerador de Scripts em Massa")
-st.markdown("Cole uma lista de @arrobas do Instagram. O sistema puxa os dados via Google, a IA qualifica o ICP e já cospe os textos prontos para copiar e colar.")
+# --- Layout do Cabeçalho com o botão de Link Externo ---
+col_titulo, col_botoes = st.columns([4, 1])
+with col_titulo:
+    st.title("⚡ Qualificador e Gerador de Scripts em Massa")
+    st.markdown("Cole uma lista de @arrobas do Instagram. O sistema puxa os dados via Google, a IA qualifica o ICP e já cospe os textos prontos para copiar e colar.")
+with col_botoes:
+    st.write("") # Espaçamento para alinhar com o título
+    st.write("")
+    # Botão para o B2ScraperLinkedIn
+    st.link_button("💼 Ir para B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
+
 
 # --- Configurações na Barra Lateral ---
 with st.sidebar:
