@@ -7,10 +7,15 @@ import time
 st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
 
 # ==========================================
-# 🔑 SUAS CHAVES FIXAS (HARDCODED)
+# 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
 # ==========================================
-CHAVE_SERPER_PADRAO = "902a25118f1f65d63bef8f294d747d3624642da1"
-CHAVE_GEMINI_PADRAO = "AIzaSyBdl3YB9EvQjYz_NjvGQs4wSzXn7Q4qNOQ"
+# Tenta pegar do Streamlit Secrets (nuvem). Se der erro, deixa vazio.
+try:
+    CHAVE_SERPER_PADRAO = st.secrets["CHAVE_SERPER"]
+    CHAVE_GEMINI_PADRAO = st.secrets["CHAVE_GEMINI"]
+except Exception:
+    CHAVE_SERPER_PADRAO = ""
+    CHAVE_GEMINI_PADRAO = ""
 
 # --- Layout do Cabeçalho com o botão de Link Externo ---
 col_titulo, col_botoes = st.columns([4, 1])
@@ -18,9 +23,8 @@ with col_titulo:
     st.title("⚡ Qualificador e Gerador de Scripts em Massa")
     st.markdown("Cole uma lista de @arrobas do Instagram. O sistema puxa os dados via Google, a IA qualifica o ICP e já cospe os textos prontos para copiar e colar.")
 with col_botoes:
-    st.write("") # Espaçamento para alinhar com o título
+    st.write("") 
     st.write("")
-    # Botão para o B2ScraperLinkedIn
     st.link_button("💼 Ir para B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
 
 
@@ -28,7 +32,6 @@ with col_botoes:
 with st.sidebar:
     st.header("⚙️ Chaves de Acesso")
     
-    # Inicia a memória com as chaves fixas se estiver vazia
     if "api_key_serper" not in st.session_state:
         st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
     if "api_key_gemini" not in st.session_state:
@@ -37,7 +40,6 @@ with st.sidebar:
     api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
     api_key_gemini = st.text_input("API Key do Google Gemini:", type="password", value=st.session_state["api_key_gemini"])
     
-    # Atualiza a sessão caso você digite uma chave nova na tela
     st.session_state["api_key_serper"] = api_key_serper
     st.session_state["api_key_gemini"] = api_key_gemini
     
@@ -46,29 +48,25 @@ with st.sidebar:
     seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
     anos_exp = st.text_input("Anos de Experiência:", value="5")
 
-# --- O CÉREBRO DA IA (Agora com Auto-Seleção) ---
+# --- O CÉREBRO DA IA ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
         
-        # 1. Pergunta ao Google quais modelos sua chave tem acesso
         modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
         if not modelos_disponiveis:
             return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de geração de texto.", "script": ""}
             
-        # 2. Escolhe automaticamente o melhor modelo da lista (Flash ou Pro)
-        modelo_escolhido = modelos_disponiveis[0] # Padrão de segurança
+        modelo_escolhido = modelos_disponiveis[0]
         for nome in modelos_disponiveis:
             if 'flash' in nome or 'pro' in nome:
                 modelo_escolhido = nome
                 break
                 
-        # Limpa o nome caso venha com 'models/' na frente
         nome_limpo = modelo_escolhido.replace("models/", "")
         modelo = genai.GenerativeModel(nome_limpo)
         
-        # PROMPT DO RENÊ:
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
         A mentoria custa R$40.000,00 e dura 1 ano (podendo parcelar em até 12x), ou R$25.000,00 por 6 meses.
@@ -152,7 +150,6 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         """
         
         resposta = modelo.generate_content(prompt)
-        # Limpa possível formatação de código do retorno da IA
         texto_json = resposta.text.replace("```json", "").replace("```", "").strip()
         return json.loads(texto_json)
         
@@ -180,7 +177,7 @@ lista_arrobas = st.text_area("Cole os @arrobas do Instagram (um por linha):", pl
 
 if st.button("🚀 Processar e Qualificar Lote", type="primary"):
     if not api_key_serper or not api_key_gemini:
-        st.error("Preencha as duas API Keys na barra lateral!")
+        st.error("Preencha as duas API Keys na barra lateral (ou configure os Secrets)!")
     elif not lista_arrobas.strip():
         st.warning("Cole pelo menos um @arroba.")
     else:
@@ -195,10 +192,8 @@ if st.button("🚀 Processar e Qualificar Lote", type="primary"):
         for i, arroba in enumerate(arrobas):
             barra.progress((i + 1) / len(arrobas), text=f"Analisando {arroba}...")
             
-            # Passo 1: Puxar a bio invisivelmente via Google
             bio = buscar_bio_no_google(arroba, api_key_serper)
             
-            # Passo 2: Mandar para a IA ler, qualificar e preencher os [colchetes]
             if bio and "Erro" not in bio and "Nenhuma" not in bio:
                 avaliacao = analisar_e_gerar_script(arroba, bio, api_key_gemini, seu_nome, anos_exp)
                 
@@ -209,7 +204,7 @@ if st.button("🚀 Processar e Qualificar Lote", type="primary"):
             else:
                 resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
             
-            time.sleep(1.5) # Pausa ligeiramente maior para evitar bloqueios de taxa da API
+            time.sleep(1.5)
         
         barra.empty()
         st.divider()
