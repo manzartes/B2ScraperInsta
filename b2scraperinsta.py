@@ -17,9 +17,15 @@ except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
 
-# --- INICIALIZANDO O HISTÓRICO NA MEMÓRIA ---
+# --- INICIALIZANDO MEMÓRIA E HISTÓRICO ---
 if "historico_leads" not in st.session_state:
     st.session_state["historico_leads"] = []
+if "ultima_busca_nicho" not in st.session_state:
+    st.session_state["ultima_busca_nicho"] = ""
+if "ultima_busca_local" not in st.session_state:
+    st.session_state["ultima_busca_local"] = ""
+if "proxima_pagina" not in st.session_state:
+    st.session_state["proxima_pagina"] = 1
 
 # --- Layout do Cabeçalho com os botões ---
 col_titulo, col_botoes = st.columns([3, 1])
@@ -54,7 +60,7 @@ with st.sidebar:
     anos_exp = st.text_input("Anos de Experiência:", value="5")
 
 # --- MOTOR DE GARIMPO (PAGINADO E SEGURO) ---
-def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
+def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     query = f'site:instagram.com "{profissao}"'
     if localizacao:
@@ -63,18 +69,19 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    # Calculamos quantas páginas de 10 precisamos (pedimos o dobro de páginas porque vamos descartar alguns resultados lixo)
     paginas_necessarias = (qtd // 10) + 4 
+    ultima_pagina_pesquisada = pagina_inicial
     
     barra_busca = st.progress(0, text="A contactar o Google de forma segura...")
     
-    for pagina in range(1, paginas_necessarias + 1):
+    for pagina in range(pagina_inicial, pagina_inicial + paginas_necessarias):
+        ultima_pagina_pesquisada = pagina
         if len(arrobas_encontrados) >= qtd:
             break
             
-        barra_busca.progress(pagina / paginas_necessarias, text=f"A ler página {pagina} do Google...")
+        progresso = min((pagina - pagina_inicial) / paginas_necessarias, 1.0)
+        barra_busca.progress(progresso, text=f"A ler página {pagina} do Google...")
         
-        # Agora pedimos o padrão seguro: 10 resultados por vez
         payload = json.dumps({"q": query, "page": pagina, "num": 10}) 
         headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
         
@@ -89,7 +96,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
             organicos = dados.get("organic", [])
             
             if not organicos:
-                break # Acabaram os resultados do Google
+                break # Acabaram os resultados
                 
             for item in organicos:
                 link = item.get("link", "")
@@ -108,29 +115,18 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
             st.error(f"Erro interno ao buscar perfis: {str(e)}")
             break
             
-        time.sleep(0.5) # Pausa humana para não dar erro 400
+        time.sleep(0.5) 
         
     barra_busca.empty()
-    return arrobas_encontrados[:qtd] # Devolve exatamente a quantidade pedida
+    return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
 # --- O CÉREBRO DA IA ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
         
-        modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        if not modelos_disponiveis:
-            return {"status": "ERRO", "motivo": "A sua chave não tem acesso a nenhum modelo de geração de texto.", "script_1": "", "script_2": "", "script_3": ""}
-            
-        modelo_escolhido = modelos_disponiveis[0]
-        for nome in modelos_disponiveis:
-            if 'flash' in nome or 'pro' in nome:
-                modelo_escolhido = nome
-                break
-                
-        nome_limpo = modelo_escolhido.replace("models/", "")
-        modelo = genai.GenerativeModel(nome_limpo)
+        # Forçando o modelo 1.5-flash que é um trator para processar grandes volumes rapidamente
+        modelo = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -304,6 +300,7 @@ def processar_lista_arrobas(lista_de_arrobas):
         else:
             resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
         
+        # Como você está num plano pago agora, um tempo de pausa menor (1.5s) é perfeitamente seguro
         time.sleep(1.5)
     
     barra.empty()
@@ -334,19 +331,47 @@ with aba_garimpo:
     with col3:
         qtd_busca = st.number_input("Qtd. Máxima:", min_value=5, max_value=50, value=15, step=5)
         
-    if st.button("🔍 Garimpar e Qualificar", type="primary", use_container_width=True):
+    if st.button("🔍 Iniciar Nova Busca", type="primary", use_container_width=True):
         if not api_key_serper or not api_key_gemini:
             st.error("Preencha as duas API Keys na barra lateral!")
         elif not nicho_alvo:
             st.warning("Preencha o Nicho/Profissão para o robô saber quem procurar.")
         else:
+            # Reseta a página para uma busca nova
+            st.session_state["ultima_busca_nicho"] = nicho_alvo
+            st.session_state["ultima_busca_local"] = local_alvo
+            st.session_state["proxima_pagina"] = 1
+            
             with st.spinner(f"A varrer a internet à procura de {nicho_alvo}..."):
-                arrobas_encontrados = garimpar_perfis_google(nicho_alvo, local_alvo, qtd_busca, api_key_serper)
+                arrobas_encontrados, prox_pag = garimpar_perfis_google(nicho_alvo, local_alvo, qtd_busca, api_key_serper, 1)
+                st.session_state["proxima_pagina"] = prox_pag
                 
             if not arrobas_encontrados:
                 st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico ou verifique sua quota do Serper.")
             else:
                 st.success(f"Foram capturados {len(arrobas_encontrados)} perfis brutos! A iniciar qualificação IA...")
+                processar_lista_arrobas(arrobas_encontrados)
+
+    # BOTÃO MÁGICO "PESQUISAR MAIS 10" (Só aparece depois que você fez a primeira busca)
+    if st.session_state["ultima_busca_nicho"]:
+        st.divider()
+        st.markdown(f"**Continuar o garimpo anterior:** *{st.session_state['ultima_busca_nicho']}* em *{st.session_state['ultima_busca_local']}*")
+        
+        if st.button("➕ Pesquisar Mais 10 Leads", type="secondary", use_container_width=True):
+            with st.spinner(f"A folhear o Google (Página {st.session_state['proxima_pagina']})..."):
+                arrobas_encontrados, prox_pag = garimpar_perfis_google(
+                    st.session_state["ultima_busca_nicho"], 
+                    st.session_state["ultima_busca_local"], 
+                    10, 
+                    api_key_serper, 
+                    st.session_state["proxima_pagina"]
+                )
+                st.session_state["proxima_pagina"] = prox_pag
+                
+            if not arrobas_encontrados:
+                st.warning("Parece que chegamos ao fim dos resultados do Google para esta pesquisa. Tente outro nicho ou cidade!")
+            else:
+                st.success(f"Mais {len(arrobas_encontrados)} perfis capturados da próxima página! A qualificar...")
                 processar_lista_arrobas(arrobas_encontrados)
 
 with aba_busca:
