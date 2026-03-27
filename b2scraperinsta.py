@@ -53,40 +53,50 @@ with st.sidebar:
     seu_nome = st.text_input("O Seu Nome:", value="Henrique Durant")
     anos_exp = st.text_input("Anos de Experiência:", value="5")
 
-# --- MOTOR DE GARIMPO (GOOGLE HACK) ---
+# --- MOTOR DE GARIMPO (GOOGLE HACK MELHORADO) ---
 def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
     url = "https://google.serper.dev/search"
-    # Focar no Instagram e usar palavras-chave. Excluir URLs de publicações/reels para focar em perfis.
+    
+    # Busca simplificada para não bugar o Google. 
     query = f'site:instagram.com "{profissao}"'
     if localizacao:
         query += f' "{localizacao}"'
-    query += ' -inurl:p -inurl:reel -inurl:explore -inurl:tags -inurl:stories'
     
-    # O Serper permite buscar até 100 resultados por vez
-    payload = json.dumps({"q": query, "num": min(qtd + 40, 100)}) 
+    payload = json.dumps({"q": query, "num": 100}) # Pede 100 pra garantir margem
     headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
     
     try:
         res = requests.post(url, headers=headers, data=payload)
-        res.raise_for_status()
-        dados = res.json()
         
+        # Se a API der erro (ex: falta de crédito), vai mostrar na tela agora!
+        if not res.ok:
+            st.error(f"Erro na API do Serper: {res.text}")
+            return []
+            
+        dados = res.json()
         arrobas_encontrados = []
+        
+        # Palavras reservadas do Instagram que não são perfis
+        palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
+        
         for item in dados.get("organic", []):
             link = item.get("link", "")
-            # Extrair o nome de utilizador do link usando Regex
+            # Extrair o nome de utilizador do link
             match = re.search(r'instagram\.com/([^/?]+)', link)
             if match:
                 username = match.group(1).strip()
-                # Filtrar palavras reservadas do Instagram que possam passar
-                if username.lower() not in ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal']:
+                # O filtro agora é feito no Python, mais seguro e eficiente
+                if username.lower() not in palavras_ignoradas:
                     arroba_formatado = f"@{username}"
                     if arroba_formatado not in arrobas_encontrados:
                         arrobas_encontrados.append(arroba_formatado)
+                    
                     if len(arrobas_encontrados) >= qtd:
                         break
+                        
         return arrobas_encontrados
     except Exception as e:
+        st.error(f"Erro interno ao buscar perfis: {str(e)}")
         return []
 
 # --- O CÉREBRO DA IA ---
