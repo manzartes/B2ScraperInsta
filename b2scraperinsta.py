@@ -215,26 +215,40 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
         Espero que sim.
+            
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
+        
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X], principalmente do seu foco em [ESPECIALIDADE].
+        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
         Posso compartilhar essas observações?
 
         [SCRIPT INICIAL 2 - SEM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
         espero que sim.
+            
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X].
+        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
         Posso compartilhar essas observações?
 
         [SCRIPT DE 2 DIAS]
-        Boa tarde, [NOME]. tudo bem? Espero que sim.
+        Boa tarde, [NOME]. tudo bem? 
+        Espero que sim.
+            
         Chegou a ver minha mensagem? O que me diz? 🙂
 
         [SCRIPT DE 4 DIAS]
         Boa tarde, [NOME]. Tudo certo por aí? Espero que sim.
-        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada... Tenho diversas pessoas com um perfil semelhante ao seu tendo grandes transformações... gostaria de saber se você tem algum interesse em entender melhor ou se posso seguir adiante. Abraços.
+            
+        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada... 
+        
+        Tenho diversas pessoas com um perfil semelhante ao seu tendo grandes transformações... 
+        
+        gostaria de saber se você tem algum interesse em entender melhor ou se posso seguir adiante. 
+        
+        Abraços.
 
         Retorne APENAS um objeto JSON válido (sem markdown):
         "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio", "script_2": "texto ou vazio", "script_3": "texto ou vazio"
