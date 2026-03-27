@@ -37,11 +37,9 @@ if "leads_aprovados_tela" not in st.session_state:
 if "leads_reprovados_tela" not in st.session_state:
     st.session_state["leads_reprovados_tela"] = []
 
-# Memória RAM da Blacklist (da sessão atual)
 if "blacklist_arrobas" not in st.session_state:
     st.session_state["blacklist_arrobas"] = set()
 
-# Memória de Treinamento
 if "bons_exemplos" not in st.session_state:
     st.session_state["bons_exemplos"] = []
 if "maus_exemplos" not in st.session_state:
@@ -66,7 +64,6 @@ with col_botoes:
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
     
-    # GAVETA 1: Destino CRM (Aberta por padrão por ser a mais usada)
     with st.expander("🎯 Destino na Planilha (CRM)", expanded=True):
         if "url_webhook" not in st.session_state:
             st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
@@ -79,14 +76,11 @@ with st.sidebar:
         st.session_state["url_webhook"] = url_webhook
         st.session_state["nome_aba"] = nome_aba
 
-    # GAVETA 2: Blacklist Definitiva (Anti-Repetidos)
     with st.expander("🚫 Blacklist Definitiva", expanded=False):
         st.markdown("<small>Cole aqui a Coluna de Arrobas do seu CRM. O robô vai ignorar eles para sempre.</small>", unsafe_allow_html=True)
         blacklist_texto = st.text_area("Arrobas já abordados:", height=150, placeholder="@joao\n@clinica_xyz")
-        # Transforma o texto colado numa lista limpa de arrobas
         blacklist_manual = {a.strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in blacklist_texto.split("\n") if a.strip()}
 
-    # GAVETA 3: Chaves de Acesso
     with st.expander("🔑 Chaves de API", expanded=False):
         if "api_key_serper" not in st.session_state:
             st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
@@ -99,7 +93,6 @@ with st.sidebar:
         st.session_state["api_key_serper"] = api_key_serper
         st.session_state["api_key_gemini"] = api_key_gemini
 
-    # GAVETA 4: Seu Perfil
     with st.expander("👤 Seu Perfil (BDR)", expanded=False):
         seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
         anos_exp = st.text_input("Anos de Experiência:", value="5")
@@ -135,7 +128,6 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    # Junta a Blacklist da sessão atual com a Blacklist que você colou lá no menu lateral
     blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual)
     
     paginas_necessarias = (qtd // 10) + 4 
@@ -174,7 +166,6 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
                     if username.lower() not in palavras_ignoradas:
                         arroba_formatado = f"@{username}"
                         
-                        # CHECAGEM FINAL DA BLACKLIST TOTAL: Se já foi abordado, PULA!
                         if arroba_formatado not in blacklist_total and arroba_formatado not in arrobas_encontrados:
                             arrobas_encontrados.append(arroba_formatado)
                         
@@ -189,7 +180,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA ---
+# --- CÉREBRO DA IA (FORMATAÇÃO CORRIGIDA) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
@@ -229,30 +220,53 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         Resumo do Google para a conta {arroba}: "{snippet_google}"
 
         Sua tarefa: Descubra Nome, Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere 3 SCRIPTS.
+        
+        🚨 REGRA DE FORMATAÇÃO EXTREMA: Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. Isso é fundamental para a escaneabilidade do lead. No JSON, use "\\n\\n" para representar essas quebras de linha entre os parágrafos.
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
         Espero que sim.
+        
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
+        
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X], principalmente do seu foco em [ESPECIALIDADE].
+        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
+        
         Posso compartilhar essas observações?
 
         [SCRIPT INICIAL 2 - SEM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
-        espero que sim.
+        Espero que sim.
+        
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
+        
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X].
+        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
+        
         Posso compartilhar essas observações?
 
         [SCRIPT DE 2 DIAS]
-        Boa tarde, [NOME]. tudo bem? Espero que sim.
-        Chegou a ver minha mensagem? O que me diz? 🙂
+        Boa tarde, [NOME].
+        tudo bem?
+        Espero que sim.
+        
+        Chegou a ver minha mensagem?
+        O que me diz? 🙂
 
         [SCRIPT DE 4 DIAS]
-        Boa tarde, [NOME]. Tudo certo por aí? Espero que sim.
-        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada... Tenho diversas pessoas com um perfil semelhante ao seu tendo grandes transformações... gostaria de saber se você tem algum interesse em entender melhor ou se posso seguir adiante. Abraços.
+        Boa tarde, [NOME].
+        Tudo certo por aí?
+        Espero que sim.
+        
+        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada no que busca fazer e muito comprometida com o seu negócio, sua autoridade e imagem pessoal.
+        
+        Tenho diversas pessoas com um perfil semelhante ao seu, tendo grandes transformações com o meu método para ser percebido como autoridade e atrair clientes qualificados.
+        
+        Por todos esses motivos, acredito que o projeto possa ser muito agregador para ti, porém vem sendo um tanto quanto difícil de nos comunicarmos, então eu gostaria de saber se você tem algum interesse em entender melhor ou se realmente posso seguir adiante e falar com novas pessoas.
+        
+        Abraços.
 
         Retorne APENAS um objeto JSON válido (sem markdown):
         "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio", "script_2": "texto ou vazio", "script_3": "texto ou vazio"
@@ -313,8 +327,13 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                 st.success("✅ Enviado!")
             
         st.divider()
+        st.markdown("**1️⃣ Mensagem Inicial (Diagnóstico)**")
         st.code(chumbo.get('script_1', ''), language="markdown")
+        
+        st.markdown("**2️⃣ Cobrança (2 Dias)**")
         st.code(chumbo.get('script_2', ''), language="markdown")
+        
+        st.markdown("**3️⃣ Xeque-Mate (4 Dias)**")
         st.code(chumbo.get('script_3', ''), language="markdown")
         
         st.divider()
