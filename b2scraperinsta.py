@@ -4,6 +4,7 @@ import json
 import google.generativeai as genai
 import time
 import re
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
 
@@ -13,9 +14,11 @@ st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="
 try:
     CHAVE_SERPER_PADRAO = st.secrets["CHAVE_SERPER"]
     CHAVE_GEMINI_PADRAO = st.secrets["CHAVE_GEMINI"]
+    URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
 except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
+    URL_WEBHOOK_PLANILHA = ""
 
 # --- INICIALIZANDO MEMÓRIA E HISTÓRICO ---
 if "historico_leads" not in st.session_state:
@@ -27,39 +30,71 @@ if "ultima_busca_local" not in st.session_state:
 if "proxima_pagina" not in st.session_state:
     st.session_state["proxima_pagina"] = 1
 
-# --- Layout do Cabeçalho com os botões ---
+if "bons_exemplos" not in st.session_state:
+    st.session_state["bons_exemplos"] = []
+if "maus_exemplos" not in st.session_state:
+    st.session_state["maus_exemplos"] = []
+if "feedbacks_dados" not in st.session_state:
+    st.session_state["feedbacks_dados"] = [] 
+
+# --- Layout do Cabeçalho ---
 col_titulo, col_botoes = st.columns([3, 1])
 with col_titulo:
     st.title("⚡ Máquina de Garimpo e Qualificação")
-    st.markdown("Encontre perfis automaticamente pelo Google, qualifique o ICP com Inteligência Artificial e gere os scripts de vendas prontos para copiar.")
+    st.markdown("Encontre perfis, qualifique com IA (que aprende com você) e mande para o CRM com 1 clique.")
 with col_botoes:
     st.write("") 
     st.write("")
-    st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?gid=1396779725#gid=1396779725", use_container_width=True)
     st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
     st.link_button("🕵️ Dossiê ABM", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
 # --- Configurações na Barra Lateral ---
 with st.sidebar:
-    st.header("⚙️ Chaves de Acesso")
+    st.header("⚙️ Configurações")
     
     if "api_key_serper" not in st.session_state:
         st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
     if "api_key_gemini" not in st.session_state:
         st.session_state["api_key_gemini"] = CHAVE_GEMINI_PADRAO
+    if "url_webhook" not in st.session_state:
+        st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
 
     api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
     api_key_gemini = st.text_input("API Key do Google Gemini:", type="password", value=st.session_state["api_key_gemini"])
+    url_webhook = st.text_input("URL do Webhook (Planilha):", type="password", value=st.session_state["url_webhook"], help="Cole aqui a URL do Google Apps Script ou Make/Zapier para enviar dados direto para a planilha.")
     
     st.session_state["api_key_serper"] = api_key_serper
     st.session_state["api_key_gemini"] = api_key_gemini
+    st.session_state["url_webhook"] = url_webhook
     
     st.divider()
     st.markdown("**Seu Perfil (BDR):**")
     seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
     anos_exp = st.text_input("Anos de Experiência:", value="5")
+    
+    st.divider()
+    st.caption(f"🧠 A IA já aprendeu com: {len(st.session_state['bons_exemplos'])} bons e {len(st.session_state['maus_exemplos'])} ruins.")
 
-# --- MOTOR DE GARIMPO (PAGINADO E SEGURO) ---
+# --- ENVIAR PARA GOOGLE SHEETS ---
+def enviar_lead_para_planilha(lead_dados):
+    webhook = st.session_state["url_webhook"]
+    if not webhook:
+        st.error("Configure a URL do Webhook na barra lateral primeiro!")
+        return False
+    
+    try:
+        # Envia os dados estruturados para a sua planilha via POST
+        resposta = requests.post(webhook, json=lead_dados)
+        if resposta.ok:
+            return True
+        else:
+            st.error("Falha ao salvar. Verifique se o webhook está correto.")
+            return False
+    except Exception as e:
+        st.error(f"Erro de conexão com a planilha: {e}")
+        return False
+
+# --- MOTOR DE GARIMPO ---
 def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     query = f'site:instagram.com "{profissao}"'
@@ -72,7 +107,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     paginas_necessarias = (qtd // 10) + 4 
     ultima_pagina_pesquisada = pagina_inicial
     
-    barra_busca = st.progress(0, text="Contatando o Google de forma segura...")
+    barra_busca = st.progress(0, text="Contatando o Google...")
     
     for pagina in range(pagina_inicial, pagina_inicial + paginas_necessarias):
         ultima_pagina_pesquisada = pagina
@@ -87,7 +122,6 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
         
         try:
             res = requests.post(url, headers=headers, data=payload)
-            
             if not res.ok:
                 st.error(f"Erro na API do Serper na página {pagina}: {res.text}")
                 break
@@ -96,7 +130,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
             organicos = dados.get("organic", [])
             
             if not organicos:
-                break # Acabaram os resultados
+                break 
                 
             for item in organicos:
                 link = item.get("link", "")
@@ -120,13 +154,30 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- O CÉREBRO DA IA (Modelo cravado pós-upgrade) ---
+# --- O CÉREBRO DA IA (Com Regra Anti-Privado) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
+        modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
-        # Agora que estamos na conta paga, usamos direto o modelo que sabemos que funciona perfeitamente!
-        modelo = genai.GenerativeModel('gemini-2.5-flash')
+        if not modelos_disponiveis:
+            return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de IA."}
+            
+        modelo_escolhido = modelos_disponiveis[0]
+        for nome in modelos_disponiveis:
+            if 'flash' in nome:
+                modelo_escolhido = nome
+                
+        nome_limpo = modelo_escolhido.replace("models/", "")
+        modelo = genai.GenerativeModel(nome_limpo)
+        
+        treinamento_extra = ""
+        if st.session_state["bons_exemplos"]:
+            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:])
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário GOSTOU destes tipos de perfis recentemente. Use como referência de APROVAÇÃO:\n- {bons}"
+        if st.session_state["maus_exemplos"]:
+            maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário REPROVOU estes tipos de perfis recentemente. Se for parecido com isso, REPROVE:\n- {maus}"
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -149,8 +200,10 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         3. Seguidores: Ideal 2k a 50k. Menos que 2k é OK. MAIS de 50k REPROVAR (já deve ter mentoria).
         4. Bio bagunçada: APROVAR (ótimo para nós, significa que podemos ajudar).
         5. Posicionamento ruim/fraco: APROVAR (ótimo para nós, é o que resolvemos).
-        6. Perfil Privado NÃO nos interessa.
+        6. Perfil Privado: Se houver qualquer indício de que a conta é privada, fechada ou restrita (ex: "This account is private", "Conta privada"), REPROVAR IMEDIATAMENTE.
+        
         *Atenção*: Como analisa apenas textos extraídos do Google, se não houver menção sobre a foto ou número exato de seguidores, assuma que está OK e NÃO reprove por falta de dados. Só reprove se a informação lida deixar claro a violação das regras.
+        {treinamento_extra}
 
         Aqui está o resumo que o Google obteve do Instagram da conta {arroba}:
         "{snippet_google}"
@@ -237,7 +290,7 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar no Google."
 
 # ==========================================
-# 🎨 DESIGN DA CAIXA DO LEAD (OTIMIZADO)
+# 🎨 DESIGN DA CAIXA DO LEAD
 # ==========================================
 def desenhar_card_lead(chumbo):
     with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado"):
@@ -246,11 +299,18 @@ def desenhar_card_lead(chumbo):
         username_limpo = username_limpo.replace('/', '') 
         link_ig = f"https://www.instagram.com/{username_limpo}/"
         
-        col_motivo, col_botao = st.columns([3, 1])
-        with col_motivo:
-            st.caption(f"**Por que passou:** {chumbo['motivo']}")
-        with col_botao:
-            st.link_button("👉 Abrir Instagram", link_ig, use_container_width=True, type="primary")
+        # LINHA 1: Copiar, Instagram e Planilha
+        col1, col2, col3, col4 = st.columns([1.5, 1, 1, 1])
+        with col1:
+            st.caption(f"**Motivo:** {chumbo['motivo']}")
+        with col2:
+            st.code(username_limpo, language=None)
+        with col3:
+            st.link_button("👉 Abrir Insta", link_ig, use_container_width=True, type="primary")
+        with col4:
+            if st.button("✅ Enviar CRM", key=f"crm_{chumbo['arroba']}", use_container_width=True):
+                if enviar_lead_para_planilha(chumbo):
+                    st.toast(f"Lead {username_limpo} salvo na planilha com sucesso!", icon="✅")
             
         st.divider()
         
@@ -262,6 +322,25 @@ def desenhar_card_lead(chumbo):
         
         st.markdown("**3️⃣ Xeque-Mate (4 Dias)**")
         st.code(chumbo.get('script_3', ''), language="markdown")
+        
+        st.divider()
+        
+        # ÁREA DE TREINAMENTO DA IA
+        st.markdown("**A IA acertou neste perfil? (Ajude-a a aprender)**")
+        if chumbo['arroba'] not in st.session_state["feedbacks_dados"]:
+            col_fb1, col_fb2, _ = st.columns([1, 1, 2])
+            with col_fb1:
+                if st.button("👍 Sim, buscar parecidos", key=f"up_{chumbo['arroba']}"):
+                    st.session_state["bons_exemplos"].append(chumbo.get('bio', ''))
+                    st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    st.rerun()
+            with col_fb2:
+                if st.button("👎 Não, perfil ruim", key=f"down_{chumbo['arroba']}"):
+                    st.session_state["maus_exemplos"].append(chumbo.get('bio', ''))
+                    st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    st.rerun()
+        else:
+            st.success("✅ Feedback registrado! A IA aprendeu com este perfil.")
 
 # ==========================================
 # 🚀 FUNÇÃO PRINCIPAL DE PROCESSAMENTO
@@ -284,6 +363,7 @@ def processar_lista_arrobas(lista_de_arrobas):
             if avaliacao.get("status") == "APROVADO":
                 lead_aprovado = {
                     "arroba": arroba, 
+                    "bio": bio,
                     "script_1": avaliacao.get("script_1"), 
                     "script_2": avaliacao.get("script_2"), 
                     "script_3": avaliacao.get("script_3"), 
@@ -291,7 +371,6 @@ def processar_lista_arrobas(lista_de_arrobas):
                 }
                 resultados_aprovados.append(lead_aprovado)
                 
-                # Guardar no Histórico
                 arrobas_salvos = [l["arroba"] for l in st.session_state["historico_leads"]]
                 if arroba not in arrobas_salvos:
                     st.session_state["historico_leads"].insert(0, lead_aprovado) 
@@ -301,7 +380,7 @@ def processar_lista_arrobas(lista_de_arrobas):
         else:
             resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
         
-        time.sleep(1.5)
+        time.sleep(1.0)
     
     barra.empty()
     st.divider()
@@ -316,7 +395,7 @@ def processar_lista_arrobas(lista_de_arrobas):
             st.write(f"- **{lixo['arroba']}**: {lixo['motivo']}")
 
 # --- INTERFACE COM ABAS ---
-aba_garimpo, aba_busca, aba_historico = st.tabs(["🔍 Garimpo Automático", "📝 Colar @Arrobas Manualmente", "📚 Histórico de Leads Salvos"])
+aba_garimpo, aba_busca, aba_historico, aba_crm = st.tabs(["🔍 Garimpo", "📝 Colar @Arrobas", "📚 Histórico", "📊 Planilha CRM"])
 
 with aba_garimpo:
     st.subheader("Encontrar e Qualificar Leads de forma automática")
@@ -336,7 +415,6 @@ with aba_garimpo:
         elif not nicho_alvo:
             st.warning("Preencha o Nicho/Profissão para o robô saber quem procurar.")
         else:
-            # Reseta a página para uma busca nova
             st.session_state["ultima_busca_nicho"] = nicho_alvo
             st.session_state["ultima_busca_local"] = local_alvo
             st.session_state["proxima_pagina"] = 1
@@ -346,12 +424,11 @@ with aba_garimpo:
                 st.session_state["proxima_pagina"] = prox_pag
                 
             if not arrobas_encontrados:
-                st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico ou verifique sua quota do Serper.")
+                st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico.")
             else:
                 st.success(f"Foram capturados {len(arrobas_encontrados)} perfis brutos! Iniciando qualificação na IA...")
                 processar_lista_arrobas(arrobas_encontrados)
 
-    # BOTÃO MÁGICO "PESQUISAR MAIS 10" 
     if st.session_state["ultima_busca_nicho"]:
         st.divider()
         st.markdown(f"**Continuar o garimpo anterior:** *{st.session_state['ultima_busca_nicho']}* em *{st.session_state['ultima_busca_local']}*")
@@ -379,7 +456,7 @@ with aba_busca:
 
     if st.button("🚀 Processar Lote Manual", type="primary"):
         if not api_key_serper or not api_key_gemini:
-            st.error("Preencha as duas API Keys na barra lateral!")
+            st.error("Preencha as duas API Keys!")
         elif not lista_arrobas.strip():
             st.warning("Cole pelo menos um @arroba.")
         else:
@@ -388,10 +465,15 @@ with aba_busca:
 
 with aba_historico:
     st.subheader("📚 Seus Leads Qualificados")
-    st.markdown("Aqui ficam salvos os leads que você já aprovou. Volte aqui para copiar as mensagens de **Follow-up** (2 ou 4 dias). *Eles sumirão se você fechar a aba do navegador.*")
+    st.markdown("Aqui ficam salvos os leads que você já aprovou. Volte aqui para copiar as mensagens de **Follow-up**.")
     
     if not st.session_state["historico_leads"]:
-        st.info("Nenhum lead qualificado ainda. Volte nas abas anteriores e processe a sua primeira lista!")
+        st.info("Nenhum lead qualificado ainda.")
     else:
         for chumbo in st.session_state["historico_leads"]:
             desenhar_card_lead(chumbo)
+
+with aba_crm:
+    st.subheader("📊 Planilha CRM Integrada")
+    st.markdown("Visualize seus leads aqui mesmo.")
+    components.iframe("https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?rm=minimal", height=800, scrolling=True)
