@@ -76,9 +76,16 @@ with st.sidebar:
         st.session_state["url_webhook"] = url_webhook
         st.session_state["nome_aba"] = nome_aba
 
-    with st.expander("🚫 Blacklist Definitiva", expanded=False):
-        st.markdown("<small>Cole aqui a Coluna de Arrobas do seu CRM. O robô vai ignorar eles para sempre.</small>", unsafe_allow_html=True)
-        blacklist_texto = st.text_area("Arrobas já abordados:", height=150, placeholder="@joao\n@clinica_xyz")
+    with st.expander("🚫 Blacklist Automática", expanded=False):
+        st.markdown("<small>O robô vai ler os leads desta aba e ignorá-los nas buscas.</small>", unsafe_allow_html=True)
+        if "aba_blacklist" not in st.session_state:
+            st.session_state["aba_blacklist"] = NOME_ABA_PADRAO
+            
+        aba_blacklist = st.text_input("Aba de Leitura (Blacklist):", value=st.session_state["aba_blacklist"], help="Pode ser a mesma aba do CRM ou outra onde está o histórico antigo.")
+        st.session_state["aba_blacklist"] = aba_blacklist
+        
+        st.markdown("<small><i>(Opcional) Adicionar avulsos:</i></small>", unsafe_allow_html=True)
+        blacklist_texto = st.text_area("Arrobas manuais:", height=60, placeholder="@joao\n@clinica_xyz")
         blacklist_manual = {a.strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in blacklist_texto.split("\n") if a.strip()}
 
     with st.expander("🔑 Chaves de API", expanded=False):
@@ -106,7 +113,6 @@ def enviar_lead_para_planilha(lead_dados):
     if not webhook:
         st.error("Configure a URL do Webhook na barra lateral primeiro!")
         return False
-    
     try:
         resposta = requests.post(webhook, json=lead_dados)
         if resposta.ok and "Sucesso" in resposta.text:
@@ -118,6 +124,27 @@ def enviar_lead_para_planilha(lead_dados):
         st.error(f"Erro de conexão: {e}")
         return False
 
+# --- PUXAR BLACKLIST DA PLANILHA ---
+def puxar_blacklist_automatica():
+    webhook = st.session_state["url_webhook"]
+    aba = st.session_state["aba_blacklist"]
+    if not webhook or not aba:
+        return set()
+        
+    try:
+        # Faz um GET na planilha pedindo a lista da aba informada
+        resposta = requests.get(f"{webhook}?aba={aba}")
+        if resposta.ok:
+            dados = resposta.json()
+            if "leads" in dados:
+                # Limpa e formata os links da planilha para "@arroba"
+                lista_suja = dados["leads"]
+                lista_limpa = {str(a).strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in lista_suja if str(a).strip()}
+                return lista_limpa
+    except Exception as e:
+        pass
+    return set()
+
 # --- MOTOR DE GARIMPO (COM BLACKLIST ABSOLUTA) ---
 def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
@@ -128,12 +155,12 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual)
+    barra_busca = st.progress(0, text="Sincronizando Blacklist com a Planilha...")
+    blacklist_da_nuvem = puxar_blacklist_automatica()
+    blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual).union(blacklist_da_nuvem)
     
     paginas_necessarias = (qtd // 10) + 4 
     ultima_pagina_pesquisada = pagina_inicial
-    
-    barra_busca = st.progress(0, text="Buscando novos leads no Google...")
     
     for pagina in range(pagina_inicial, pagina_inicial + paginas_necessarias):
         ultima_pagina_pesquisada = pagina
@@ -180,7 +207,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (FORMATAÇÃO CORRIGIDA) ---
+# --- CÉREBRO DA IA ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
