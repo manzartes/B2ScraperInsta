@@ -149,6 +149,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         3. Seguidores: Ideal 2k a 50k. Menos que 2k é OK. MAIS de 50k REPROVAR (já deve ter mentoria).
         4. Bio bagunçada: APROVAR (ótimo para nós, significa que podemos ajudar).
         5. Posicionamento ruim/fraco: APROVAR (ótimo para nós, é o que resolvemos).
+        6. Perfil Privado NÃO nos interessa.
         *Atenção*: Como analisa apenas textos extraídos do Google, se não houver menção sobre a foto ou número exato de seguidores, assuma que está OK e NÃO reprove por falta de dados. Só reprove se a informação lida deixar claro a violação das regras.
 
         Aqui está o resumo que o Google obteve do Instagram da conta {arroba}:
