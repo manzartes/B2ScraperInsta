@@ -3,14 +3,13 @@ import requests
 import json
 import google.generativeai as genai
 import time
-import re # Importando Regex para limpeza do arroba
+import re
 
 st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
 
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
 # ==========================================
-# Tenta pegar do Streamlit Secrets (nuvem). Se der erro, deixa vazio.
 try:
     CHAVE_SERPER_PADRAO = st.secrets["CHAVE_SERPER"]
     CHAVE_GEMINI_PADRAO = st.secrets["CHAVE_GEMINI"]
@@ -18,17 +17,21 @@ except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
 
-# --- Layout do Cabeçalho com o botão de Link Externo ---
-col_titulo, col_botoes = st.columns([4, 1])
+# --- INICIALIZANDO O HISTÓRICO NA MEMÓRIA ---
+if "historico_leads" not in st.session_state:
+    st.session_state["historico_leads"] = []
+
+# --- Layout do Cabeçalho com os botões ---
+col_titulo, col_botoes = st.columns([3, 1])
 with col_titulo:
     st.title("⚡ Qualificador e Gerador de Scripts em Massa")
     st.markdown("Cole uma lista de @arrobas do Instagram. O sistema puxa os dados via Google, a IA qualifica o ICP e já cospe os textos prontos para copiar e colar.")
 with col_botoes:
     st.write("") 
     st.write("")
-    st.link_button("💼 Ir para B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
+    st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?gid=1396779725#gid=1396779725", use_container_width=True)
+    st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
     st.link_button("🕵️ Dossiê ABM", "https://b2scraperweb.streamlit.app/", use_container_width=True)
-
 
 # --- Configurações na Barra Lateral ---
 with st.sidebar:
@@ -58,7 +61,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
         if not modelos_disponiveis:
-            return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de geração de texto.", "script": ""}
+            return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de geração de texto.", "script_1": "", "script_2": "", "script_3": ""}
             
         modelo_escolhido = modelos_disponiveis[0]
         for nome in modelos_disponiveis:
@@ -69,7 +72,6 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         nome_limpo = modelo_escolhido.replace("models/", "")
         modelo = genai.GenerativeModel(nome_limpo)
         
-        # PROMPT AJUSTADO: CORREÇÃO DO NOME DO BDR NO EXEMPLO
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
         A mentoria custa R$40.000,00 e dura 1 ano (podendo parcelar em até 12x), ou R$25.000,00 por 6 meses.
@@ -149,7 +151,9 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         Retorne APENAS um objeto JSON válido (sem marcação markdown, apenas o JSON puro) com estas exatas chaves:
         "status": "APROVADO" ou "REPROVADO",
         "motivo": "A justificativa curta de aprovação ou reprovação baseada nas suas regras",
-        "script": "Insira aqui TODOS OS 3 SCRIPTS GERADOS (Inicial, 2 Dias e 4 Dias), separados por uma quebra de linha visual (Ex: --- MENSAGEM INICIAL --- ... --- APÓS 2 DIAS --- etc), para que o usuário possa copiar tudo de uma vez. Deixe vazio se reprovado."
+        "script_1": "Insira aqui O SCRIPT INICIAL (1 ou 2) gerado. Deixe vazio se reprovado.",
+        "script_2": "Insira aqui O SCRIPT DE 2 DIAS gerado. Deixe vazio se reprovado.",
+        "script_3": "Insira aqui O SCRIPT DE 4 DIAS gerado. Deixe vazio se reprovado."
         """
         
         resposta = modelo.generate_content(prompt)
@@ -157,7 +161,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         return json.loads(texto_json)
         
     except Exception as e:
-        return {"status": "ERRO", "motivo": f"Falha na IA: {e}", "script": ""}
+        return {"status": "ERRO", "motivo": f"Falha na IA: {e}", "script_1": "", "script_2": "", "script_3": ""}
 
 def buscar_bio_no_google(arroba, api_serper):
     url = "https://google.serper.dev/search"
@@ -175,62 +179,96 @@ def buscar_bio_no_google(arroba, api_serper):
     except:
         return "Erro ao buscar no Google."
 
-# --- INTERFACE DE AÇÃO ---
-lista_arrobas = st.text_area("Cole os @arrobas do Instagram (um por linha):", placeholder="@dr.joaocirurgiao\n@marcos.adv\n@clinica.estetica...", height=150)
+# Função para desenhar a caixinha do Lead aprovado (usada na busca e no histórico)
+def desenhar_card_lead(chumbo):
+    with st.expander(f"🔥 {chumbo['arroba']} - Clique para enviar"):
+        st.caption(f"Por que foi aprovado: {chumbo['motivo']}")
+        
+        st.markdown("**1️⃣ Mensagem Inicial (Diagnóstico)**")
+        st.code(chumbo.get('script_1', ''), language="markdown")
+        
+        st.markdown("**2️⃣ Cobrança (2 Dias)**")
+        st.code(chumbo.get('script_2', ''), language="markdown")
+        
+        st.markdown("**3️⃣ Xeque-Mate (4 Dias)**")
+        st.code(chumbo.get('script_3', ''), language="markdown")
+        
+        # Link do Instagram limpo
+        username_limpo = chumbo['arroba'].replace('@', '').strip()
+        username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
+        username_limpo = username_limpo.replace('/', '') 
+        link_ig = f"https://www.instagram.com/{username_limpo}/"
+        st.markdown(f"[👉 Abrir Perfil do **{username_limpo}** no Instagram]({link_ig})")
 
-if st.button("🚀 Processar e Qualificar Lote", type="primary"):
-    if not api_key_serper or not api_key_gemini:
-        st.error("Preencha as duas API Keys na barra lateral (ou configure os Secrets)!")
-    elif not lista_arrobas.strip():
-        st.warning("Cole pelo menos um @arroba.")
-    else:
-        arrobas = [a.strip() for a in lista_arrobas.split("\n") if a.strip()]
-        
-        st.info(f"Processando {len(arrobas)} perfis. Isso pode levar alguns segundos...")
-        
-        barra = st.progress(0)
-        resultados_aprovados = []
-        resultados_reprovados = []
-        
-        for i, arroba in enumerate(arrobas):
-            barra.progress((i + 1) / len(arrobas), text=f"Analisando {arroba}...")
+
+# --- INTERFACE COM ABAS ---
+aba_busca, aba_historico = st.tabs(["🚀 Nova Qualificação", "📚 Histórico de Leads Salvos"])
+
+with aba_busca:
+    lista_arrobas = st.text_area("Cole os @arrobas do Instagram (um por linha):", placeholder="@dr.joaocirurgiao\n@marcos.adv\n@clinica.estetica...", height=150)
+
+    if st.button("🚀 Processar e Qualificar Lote", type="primary"):
+        if not api_key_serper or not api_key_gemini:
+            st.error("Preencha as duas API Keys na barra lateral (ou configure os Secrets)!")
+        elif not lista_arrobas.strip():
+            st.warning("Cole pelo menos um @arroba.")
+        else:
+            arrobas = [a.strip() for a in lista_arrobas.split("\n") if a.strip()]
             
-            bio = buscar_bio_no_google(arroba, api_key_serper)
+            st.info(f"Processando {len(arrobas)} perfis. Isso pode levar alguns segundos...")
             
-            if bio and "Erro" not in bio and "Nenhuma" not in bio:
-                avaliacao = analisar_e_gerar_script(arroba, bio, api_key_gemini, seu_nome, anos_exp)
+            barra = st.progress(0)
+            resultados_aprovados = []
+            resultados_reprovados = []
+            
+            for i, arroba in enumerate(arrobas):
+                barra.progress((i + 1) / len(arrobas), text=f"Analisando {arroba}...")
                 
-                if avaliacao.get("status") == "APROVADO":
-                    resultados_aprovados.append({"arroba": arroba, "script": avaliacao.get("script"), "motivo": avaliacao.get("motivo")})
+                bio = buscar_bio_no_google(arroba, api_key_serper)
+                
+                if bio and "Erro" not in bio and "Nenhuma" not in bio:
+                    avaliacao = analisar_e_gerar_script(arroba, bio, api_key_gemini, seu_nome, anos_exp)
+                    
+                    if avaliacao.get("status") == "APROVADO":
+                        lead_aprovado = {
+                            "arroba": arroba, 
+                            "script_1": avaliacao.get("script_1"), 
+                            "script_2": avaliacao.get("script_2"), 
+                            "script_3": avaliacao.get("script_3"), 
+                            "motivo": avaliacao.get("motivo")
+                        }
+                        resultados_aprovados.append(lead_aprovado)
+                        
+                        # Salva no Histórico (evitando duplicatas exatas)
+                        arrobas_salvos = [l["arroba"] for l in st.session_state["historico_leads"]]
+                        if arroba not in arrobas_salvos:
+                            st.session_state["historico_leads"].insert(0, lead_aprovado) # Coloca sempre no topo
+                            
+                    else:
+                        resultados_reprovados.append({"arroba": arroba, "motivo": avaliacao.get("motivo")})
                 else:
-                    resultados_reprovados.append({"arroba": arroba, "motivo": avaliacao.get("motivo")})
-            else:
-                resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
+                    resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
+                
+                time.sleep(1.5)
             
-            time.sleep(1.5)
-        
-        barra.empty()
-        st.divider()
-        
-        # --- EXIBIÇÃO DOS RESULTADOS ---
-        st.subheader(f"✅ {len(resultados_aprovados)} Leads Aprovados (ICP Confirmado)")
-        
-        for chumbo in resultados_aprovados:
-            with st.expander(f"🔥 {chumbo['arroba']} - Clique para enviar"):
-                st.caption(f"Por que foi aprovado: {chumbo['motivo']}")
-                st.code(chumbo['script'], language="markdown")
-                
-                # --- CORREÇÃO DO LINK DO INSTAGRAM ---
-                # Remove '@', 'http', 'www', 'instagram.com/' e barras extras para garantir apenas o username limpo
-                username_limpo = chumbo['arroba'].replace('@', '').strip()
-                username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
-                username_limpo = username_limpo.replace('/', '') # Remove barra final se houver
-                
-                # Link direto para o perfil (conforme solicitado)
-                link_ig = f"https://www.instagram.com/{username_limpo}/"
-                st.markdown(f"[👉 Abrir Perfil do **{username_limpo}** no Instagram]({link_ig})")
-        
-        if resultados_reprovados:
-            st.subheader(f"❌ {len(resultados_reprovados)} Leads Descartados (Tempo economizado!)")
-            for lixo in resultados_reprovados:
-                st.write(f"- **{lixo['arroba']}**: {lixo['motivo']}")
+            barra.empty()
+            st.divider()
+            
+            st.subheader(f"✅ {len(resultados_aprovados)} Leads Aprovados (ICP Confirmado)")
+            for chumbo in resultados_aprovados:
+                desenhar_card_lead(chumbo)
+            
+            if resultados_reprovados:
+                st.subheader(f"❌ {len(resultados_reprovados)} Leads Descartados (Tempo economizado!)")
+                for lixo in resultados_reprovados:
+                    st.write(f"- **{lixo['arroba']}**: {lixo['motivo']}")
+
+with aba_historico:
+    st.subheader("📚 Seus Leads Qualificados")
+    st.markdown("Aqui ficam salvos os leads que você já aprovou. Volte aqui para copiar as mensagens de **Follow-up** (2 ou 4 dias). *Eles sumirão se você fechar a aba do navegador.*")
+    
+    if not st.session_state["historico_leads"]:
+        st.info("Nenhum lead qualificado ainda. Volte na aba 'Nova Qualificação' e processe sua primeira lista!")
+    else:
+        for chumbo in st.session_state["historico_leads"]:
+            desenhar_card_lead(chumbo)
