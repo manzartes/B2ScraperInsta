@@ -47,6 +47,7 @@ with col_titulo:
 with col_botoes:
     st.write("") 
     st.write("")
+    st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1Ru4E7ArF3UKiPhkqjy0OkrCkdSKzcjHHchQm5v-836g/edit?gid=1121870777#gid=1121870777", use_container_width=True)
     st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
     st.link_button("🕵️ Dossiê ABM", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
@@ -482,4 +483,4 @@ with aba_historico:
 with aba_crm:
     st.subheader("📊 Planilha CRM Integrada")
     st.markdown("Visualize seus leads aqui mesmo.")
-    components.iframe("https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?rm=minimal", height=800, scrolling=True)
+    components.iframe("https://docs.google.com/spreadsheets/d/1Ru4E7ArF3UKiPhkqjy0OkrCkdSKzcjHHchQm5v-836g/edit?rm=minimal", height=800, scrolling=True)
