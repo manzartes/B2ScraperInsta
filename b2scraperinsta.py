@@ -179,11 +179,28 @@ def buscar_bio_no_google(arroba, api_serper):
     except:
         return "Erro ao buscar no Google."
 
-# Função para desenhar a caixinha do Lead aprovado (usada na busca e no histórico)
+# ==========================================
+# 🎨 DESIGN DA CAIXA DO LEAD (OTIMIZADO)
+# ==========================================
 def desenhar_card_lead(chumbo):
-    with st.expander(f"🔥 {chumbo['arroba']} - Clique para enviar"):
-        st.caption(f"Por que foi aprovado: {chumbo['motivo']}")
+    with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado"):
         
+        # 1. Prepara o link limpo do Instagram
+        username_limpo = chumbo['arroba'].replace('@', '').strip()
+        username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
+        username_limpo = username_limpo.replace('/', '') 
+        link_ig = f"https://www.instagram.com/{username_limpo}/"
+        
+        # 2. Divide o topo em duas colunas: Esquerda (Motivo) / Direita (Botão Gigante)
+        col_motivo, col_botao = st.columns([3, 1])
+        with col_motivo:
+            st.caption(f"**Por que passou:** {chumbo['motivo']}")
+        with col_botao:
+            st.link_button("👉 Abrir Instagram", link_ig, use_container_width=True, type="primary")
+            
+        st.divider() # Linha para separar o cabeçalho das mensagens
+        
+        # 3. As mensagens vêm logo abaixo, fáceis de copiar
         st.markdown("**1️⃣ Mensagem Inicial (Diagnóstico)**")
         st.code(chumbo.get('script_1', ''), language="markdown")
         
@@ -192,13 +209,6 @@ def desenhar_card_lead(chumbo):
         
         st.markdown("**3️⃣ Xeque-Mate (4 Dias)**")
         st.code(chumbo.get('script_3', ''), language="markdown")
-        
-        # Link do Instagram limpo
-        username_limpo = chumbo['arroba'].replace('@', '').strip()
-        username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
-        username_limpo = username_limpo.replace('/', '') 
-        link_ig = f"https://www.instagram.com/{username_limpo}/"
-        st.markdown(f"[👉 Abrir Perfil do **{username_limpo}** no Instagram]({link_ig})")
 
 
 # --- INTERFACE COM ABAS ---
@@ -239,10 +249,10 @@ with aba_busca:
                         }
                         resultados_aprovados.append(lead_aprovado)
                         
-                        # Salva no Histórico (evitando duplicatas exatas)
+                        # Salva no Histórico
                         arrobas_salvos = [l["arroba"] for l in st.session_state["historico_leads"]]
                         if arroba not in arrobas_salvos:
-                            st.session_state["historico_leads"].insert(0, lead_aprovado) # Coloca sempre no topo
+                            st.session_state["historico_leads"].insert(0, lead_aprovado) 
                             
                     else:
                         resultados_reprovados.append({"arroba": arroba, "motivo": avaliacao.get("motivo")})
