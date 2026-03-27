@@ -11,9 +11,10 @@ st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
 # ==========================================
+# Usamos o .get() para não quebrar o app caso você ainda não tenha configurado na nuvem
 try:
-    CHAVE_SERPER_PADRAO = st.secrets["CHAVE_SERPER"]
-    CHAVE_GEMINI_PADRAO = st.secrets["CHAVE_GEMINI"]
+    CHAVE_SERPER_PADRAO = st.secrets.get("CHAVE_SERPER", "")
+    CHAVE_GEMINI_PADRAO = st.secrets.get("CHAVE_GEMINI", "")
     URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
 except Exception:
     CHAVE_SERPER_PADRAO = ""
@@ -30,6 +31,7 @@ if "ultima_busca_local" not in st.session_state:
 if "proxima_pagina" not in st.session_state:
     st.session_state["proxima_pagina"] = 1
 
+# Memória de Treinamento da IA
 if "bons_exemplos" not in st.session_state:
     st.session_state["bons_exemplos"] = []
 if "maus_exemplos" not in st.session_state:
@@ -52,6 +54,7 @@ with col_botoes:
 with st.sidebar:
     st.header("⚙️ Configurações")
     
+    # Carrega os valores padrão (dos Secrets) para o state se estiverem vazios
     if "api_key_serper" not in st.session_state:
         st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
     if "api_key_gemini" not in st.session_state:
@@ -61,7 +64,7 @@ with st.sidebar:
 
     api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
     api_key_gemini = st.text_input("API Key do Google Gemini:", type="password", value=st.session_state["api_key_gemini"])
-    url_webhook = st.text_input("URL do Webhook (Planilha):", type="password", value=st.session_state["url_webhook"], help="Cole aqui a URL do Google Apps Script ou Make/Zapier para enviar dados direto para a planilha.")
+    url_webhook = st.text_input("URL do Webhook (Planilha):", type="password", value=st.session_state["url_webhook"], help="URL do Google Apps Script para salvar dados.")
     
     st.session_state["api_key_serper"] = api_key_serper
     st.session_state["api_key_gemini"] = api_key_gemini
@@ -79,11 +82,10 @@ with st.sidebar:
 def enviar_lead_para_planilha(lead_dados):
     webhook = st.session_state["url_webhook"]
     if not webhook:
-        st.error("Configure a URL do Webhook na barra lateral primeiro!")
+        st.error("Configure a URL do Webhook na barra lateral (ou nos Secrets) primeiro!")
         return False
     
     try:
-        # Envia os dados estruturados para a sua planilha via POST
         resposta = requests.post(webhook, json=lead_dados)
         if resposta.ok:
             return True
@@ -154,7 +156,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- O CÉREBRO DA IA (Com Regra Anti-Privado) ---
+# --- O CÉREBRO DA IA (Com Regras Avançadas e Treinamento) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
@@ -163,6 +165,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         if not modelos_disponiveis:
             return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de IA."}
             
+        # Pega a versão mais potente (flash)
         modelo_escolhido = modelos_disponiveis[0]
         for nome in modelos_disponiveis:
             if 'flash' in nome:
@@ -308,9 +311,12 @@ def desenhar_card_lead(chumbo):
         with col3:
             st.link_button("👉 Abrir Insta", link_ig, use_container_width=True, type="primary")
         with col4:
+            dados_planilha = chumbo.copy()
+            dados_planilha["link_ig"] = link_ig
+            
             if st.button("✅ Enviar CRM", key=f"crm_{chumbo['arroba']}", use_container_width=True):
-                if enviar_lead_para_planilha(chumbo):
-                    st.toast(f"Lead {username_limpo} salvo na planilha com sucesso!", icon="✅")
+                if enviar_lead_para_planilha(dados_planilha):
+                    st.toast(f"Lead salvo na planilha com sucesso!", icon="✅")
             
         st.divider()
         
@@ -411,7 +417,7 @@ with aba_garimpo:
         
     if st.button("🔍 Iniciar Nova Busca", type="primary", use_container_width=True):
         if not api_key_serper or not api_key_gemini:
-            st.error("Preencha as duas API Keys na barra lateral!")
+            st.error("Preencha as duas API Keys na barra lateral (ou nos Secrets)!")
         elif not nicho_alvo:
             st.warning("Preencha o Nicho/Profissão para o robô saber quem procurar.")
         else:
