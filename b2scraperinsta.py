@@ -32,17 +32,16 @@ if "ultima_busca_local" not in st.session_state:
 if "proxima_pagina" not in st.session_state:
     st.session_state["proxima_pagina"] = 1
 
-# Memória para a tela não apagar
 if "leads_aprovados_tela" not in st.session_state:
     st.session_state["leads_aprovados_tela"] = []
 if "leads_reprovados_tela" not in st.session_state:
     st.session_state["leads_reprovados_tela"] = []
 
-# Blacklist para não repetir leads
+# Memória RAM da Blacklist (da sessão atual)
 if "blacklist_arrobas" not in st.session_state:
     st.session_state["blacklist_arrobas"] = set()
 
-# Memória de Treinamento da IA e CRM
+# Memória de Treinamento
 if "bons_exemplos" not in st.session_state:
     st.session_state["bons_exemplos"] = []
 if "maus_exemplos" not in st.session_state:
@@ -61,36 +60,52 @@ with col_botoes:
     st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1Ru4E7ArF3UKiPhkqjy0OkrCkdSKzcjHHchQm5v-836g/edit?gid=1121870777#gid=1121870777", use_container_width=True)
     st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
 
-# --- Configurações na Barra Lateral ---
+# ==========================================
+# ⚙️ MENU LATERAL ORGANIZADO (GAVETAS)
+# ==========================================
 with st.sidebar:
-    st.header("⚙️ Configurações")
+    st.header("⚙️ Painel de Controle")
     
-    if "api_key_serper" not in st.session_state:
-        st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
-    if "api_key_gemini" not in st.session_state:
-        st.session_state["api_key_gemini"] = CHAVE_GEMINI_PADRAO
-    if "url_webhook" not in st.session_state:
-        st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
-    if "nome_aba" not in st.session_state:
-        st.session_state["nome_aba"] = NOME_ABA_PADRAO
+    # GAVETA 1: Destino CRM (Aberta por padrão por ser a mais usada)
+    with st.expander("🎯 Destino na Planilha (CRM)", expanded=True):
+        if "url_webhook" not in st.session_state:
+            st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
+        if "nome_aba" not in st.session_state:
+            st.session_state["nome_aba"] = NOME_ABA_PADRAO
+            
+        url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
+        nome_aba = st.text_input("Nome exato da Aba:", value=st.session_state["nome_aba"], help="Ex: Página1, 27/03.")
+        
+        st.session_state["url_webhook"] = url_webhook
+        st.session_state["nome_aba"] = nome_aba
 
-    api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
-    api_key_gemini = st.text_input("API Key do Google Gemini:", type="password", value=st.session_state["api_key_gemini"])
-    
+    # GAVETA 2: Blacklist Definitiva (Anti-Repetidos)
+    with st.expander("🚫 Blacklist Definitiva", expanded=False):
+        st.markdown("<small>Cole aqui a Coluna de Arrobas do seu CRM. O robô vai ignorar eles para sempre.</small>", unsafe_allow_html=True)
+        blacklist_texto = st.text_area("Arrobas já abordados:", height=150, placeholder="@joao\n@clinica_xyz")
+        # Transforma o texto colado numa lista limpa de arrobas
+        blacklist_manual = {a.strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in blacklist_texto.split("\n") if a.strip()}
+
+    # GAVETA 3: Chaves de Acesso
+    with st.expander("🔑 Chaves de API", expanded=False):
+        if "api_key_serper" not in st.session_state:
+            st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
+        if "api_key_gemini" not in st.session_state:
+            st.session_state["api_key_gemini"] = CHAVE_GEMINI_PADRAO
+            
+        api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
+        api_key_gemini = st.text_input("API Key do Gemini:", type="password", value=st.session_state["api_key_gemini"])
+        
+        st.session_state["api_key_serper"] = api_key_serper
+        st.session_state["api_key_gemini"] = api_key_gemini
+
+    # GAVETA 4: Seu Perfil
+    with st.expander("👤 Seu Perfil (BDR)", expanded=False):
+        seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
+        anos_exp = st.text_input("Anos de Experiência:", value="5")
+        
     st.divider()
-    st.markdown("🎯 **Destino na Planilha (CRM):**")
-    url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
-    nome_aba = st.text_input("Nome exato da Aba:", value=st.session_state["nome_aba"], help="Ex: Página1, 27/03. Cuidado com espaços extras!")
-    
-    st.session_state["api_key_serper"] = api_key_serper
-    st.session_state["api_key_gemini"] = api_key_gemini
-    st.session_state["url_webhook"] = url_webhook
-    st.session_state["nome_aba"] = nome_aba
-    
-    st.divider()
-    st.markdown("👤 **Seu Perfil (BDR):**")
-    seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
-    anos_exp = st.text_input("Anos de Experiência:", value="5")
+    st.caption(f"🧠 IA treinada com: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
 
 # --- ENVIAR PARA GOOGLE SHEETS ---
 def enviar_lead_para_planilha(lead_dados):
@@ -110,7 +125,7 @@ def enviar_lead_para_planilha(lead_dados):
         st.error(f"Erro de conexão: {e}")
         return False
 
-# --- MOTOR DE GARIMPO (Ignora Repetidos) ---
+# --- MOTOR DE GARIMPO (COM BLACKLIST ABSOLUTA) ---
 def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     query = f'site:instagram.com "{profissao}"'
@@ -119,6 +134,9 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
+    
+    # Junta a Blacklist da sessão atual com a Blacklist que você colou lá no menu lateral
+    blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual)
     
     paginas_necessarias = (qtd // 10) + 4 
     ultima_pagina_pesquisada = pagina_inicial
@@ -156,8 +174,8 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
                     if username.lower() not in palavras_ignoradas:
                         arroba_formatado = f"@{username}"
                         
-                        # Verifica se já vimos esse cara antes na Blacklist ou na busca atual
-                        if arroba_formatado not in st.session_state["blacklist_arrobas"] and arroba_formatado not in arrobas_encontrados:
+                        # CHECAGEM FINAL DA BLACKLIST TOTAL: Se já foi abordado, PULA!
+                        if arroba_formatado not in blacklist_total and arroba_formatado not in arrobas_encontrados:
                             arrobas_encontrados.append(arroba_formatado)
                         
                         if len(arrobas_encontrados) >= qtd:
@@ -190,10 +208,10 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         treinamento_extra = ""
         if st.session_state["bons_exemplos"]:
             bons = "\n- ".join(st.session_state["bons_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário GOSTOU destes tipos de perfis recentemente. Use como referência de APROVAÇÃO:\n- {bons}"
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário GOSTOU destes perfis recentemente. APROVE parecidos:\n- {bons}"
         if st.session_state["maus_exemplos"]:
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário REPROVOU estes tipos de perfis recentemente. Se for parecido com isso, REPROVE:\n- {maus}"
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário REPROVOU estes perfis recentemente. REPROVE parecidos:\n- {maus}"
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -215,40 +233,26 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
         Espero que sim.
-            
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
-        
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X], principalmente do seu foco em [ESPECIALIDADE].
-        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
         Posso compartilhar essas observações?
 
         [SCRIPT INICIAL 2 - SEM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
         espero que sim.
-            
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
         Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X].
-        
         Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
         Posso compartilhar essas observações?
 
         [SCRIPT DE 2 DIAS]
-        Boa tarde, [NOME]. tudo bem? 
-        Espero que sim.
-            
+        Boa tarde, [NOME]. tudo bem? Espero que sim.
         Chegou a ver minha mensagem? O que me diz? 🙂
 
         [SCRIPT DE 4 DIAS]
         Boa tarde, [NOME]. Tudo certo por aí? Espero que sim.
-            
-        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada... 
-        
-        Tenho diversas pessoas com um perfil semelhante ao seu tendo grandes transformações... 
-        
-        gostaria de saber se você tem algum interesse em entender melhor ou se posso seguir adiante. 
-        
-        Abraços.
+        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada... Tenho diversas pessoas com um perfil semelhante ao seu tendo grandes transformações... gostaria de saber se você tem algum interesse em entender melhor ou se posso seguir adiante. Abraços.
 
         Retorne APENAS um objeto JSON válido (sem markdown):
         "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio", "script_2": "texto ou vazio", "script_3": "texto ou vazio"
@@ -275,7 +279,7 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar."
 
 # ==========================================
-# 🎨 DESIGN DA CAIXA DO LEAD (Com 'Contexto' para evitar erros)
+# 🎨 DESIGN DA CAIXA DO LEAD
 # ==========================================
 def desenhar_card_lead(chumbo, contexto="geral"):
     with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado", expanded=False):
@@ -296,7 +300,6 @@ def desenhar_card_lead(chumbo, contexto="geral"):
             dados_planilha["link_ig"] = link_ig
             dados_planilha["sheet_name"] = st.session_state["nome_aba"]
             
-            # Botão de Enviar CRM blindado com contexto único
             estado_crm_key = f"estado_crm_{chumbo['arroba']}"
             if estado_crm_key not in st.session_state:
                 st.session_state[estado_crm_key] = False
@@ -368,7 +371,7 @@ def processar_lista_arrobas(lista_de_arrobas):
     barra.empty()
 
 # ==========================================
-# 🖥️ RENDERIZAR TELA ATUAL (Com identificador de aba)
+# 🖥️ RENDERIZAR TELA ATUAL
 # ==========================================
 def renderizar_resultados_garimpo(contexto_render):
     if st.session_state["leads_aprovados_tela"]:
@@ -412,7 +415,7 @@ with aba_garimpo:
             if arrobas:
                 processar_lista_arrobas(arrobas)
             else:
-                st.warning("Não foram encontrados novos perfis com estes termos (os repetidos foram ignorados).")
+                st.warning("Não foram encontrados novos perfis (todos os encontrados já estavam na sua Blacklist). Tente outro nicho!")
 
     if st.session_state["ultima_busca_nicho"]:
         st.markdown(f"**Continuar o garimpo:** *{st.session_state['ultima_busca_nicho']}* em *{st.session_state['ultima_busca_local']}*")
