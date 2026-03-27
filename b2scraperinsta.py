@@ -3,6 +3,7 @@ import requests
 import json
 import google.generativeai as genai
 import time
+import re # Importando Regex para limpeza do arroba
 
 st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
 
@@ -68,6 +69,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         nome_limpo = modelo_escolhido.replace("models/", "")
         modelo = genai.GenerativeModel(nome_limpo)
         
+        # PROMPT AJUSTADO: CORREÇÃO DO NOME DO BDR NO EXEMPLO
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
         A mentoria custa R$40.000,00 e dura 1 ano (podendo parcelar em até 12x), ou R$25.000,00 por 6 meses.
@@ -101,7 +103,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         4. Se APROVADO, gere OS 3 SCRIPTS EXATOS abaixo. 
 
         Se TIVER especialidade clara, use o SCRIPT INICIAL 1. Se NÃO TIVER, use o SCRIPT INICIAL 2.
-        Substitua apenas os colchetes [NOME], [ÁREA X] e [ESPECIALIDADE]. Troque {nome_bdr} e {exp_bdr} pelos valores passados. NÃO MUDE MAIS NADA NO TEXTO.
+        Substitua apenas os colchetes [NOME], [ÁREA X] e [ESPECIALIDADE]. Troque [NOME DO BDR] por {nome_bdr} e {exp_bdr} pelos valores passados. NÃO MUDE MAIS NADA NO TEXTO.
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
@@ -218,8 +220,15 @@ if st.button("🚀 Processar e Qualificar Lote", type="primary"):
                 st.caption(f"Por que foi aprovado: {chumbo['motivo']}")
                 st.code(chumbo['script'], language="markdown")
                 
-                link_ig = f"https://ig.me/m/{chumbo['arroba'].replace('@', '')}"
-                st.markdown(f"[👉 Abrir Direct do **{chumbo['arroba']}** no Instagram]({link_ig})")
+                # --- CORREÇÃO DO LINK DO INSTAGRAM ---
+                # Remove '@', 'http', 'www', 'instagram.com/' e barras extras para garantir apenas o username limpo
+                username_limpo = chumbo['arroba'].replace('@', '').strip()
+                username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
+                username_limpo = username_limpo.replace('/', '') # Remove barra final se houver
+                
+                # Link direto para o perfil (conforme solicitado)
+                link_ig = f"https://www.instagram.com/{username_limpo}/"
+                st.markdown(f"[👉 Abrir Perfil do **{username_limpo}** no Instagram]({link_ig})")
         
         if resultados_reprovados:
             st.subheader(f"❌ {len(resultados_reprovados)} Leads Descartados (Tempo economizado!)")
