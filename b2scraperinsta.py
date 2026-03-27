@@ -120,28 +120,13 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- O CÉREBRO DA IA (Auto-Seleção Inteligente) ---
+# --- O CÉREBRO DA IA (Modelo cravado pós-upgrade) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
         
-        # Puxa dinamicamente a lista de modelos da SUA conta
-        modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        if not modelos_disponiveis:
-            return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de IA.", "script_1": "", "script_2": "", "script_3": ""}
-            
-        # Prioriza o modelo flash mais recente disponível na sua conta
-        modelo_escolhido = modelos_disponiveis[0]
-        for nome in modelos_disponiveis:
-            if '1.5-flash' in nome:
-                modelo_escolhido = nome
-                break
-            elif 'flash' in nome or 'pro' in nome:
-                modelo_escolhido = nome
-                
-        nome_limpo = modelo_escolhido.replace("models/", "")
-        modelo = genai.GenerativeModel(nome_limpo)
+        # Agora que estamos na conta paga, usamos direto o modelo que sabemos que funciona perfeitamente!
+        modelo = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
