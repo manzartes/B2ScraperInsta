@@ -53,51 +53,65 @@ with st.sidebar:
     seu_nome = st.text_input("O Seu Nome:", value="Henrique Durant")
     anos_exp = st.text_input("Anos de Experiência:", value="5")
 
-# --- MOTOR DE GARIMPO (GOOGLE HACK MELHORADO) ---
+# --- MOTOR DE GARIMPO (PAGINADO E SEGURO) ---
 def garimpar_perfis_google(profissao, localizacao, qtd, api_serper):
     url = "https://google.serper.dev/search"
-    
-    # Busca simplificada para não bugar o Google. 
     query = f'site:instagram.com "{profissao}"'
     if localizacao:
         query += f' "{localizacao}"'
     
-    payload = json.dumps({"q": query, "num": 100}) # Pede 100 pra garantir margem
-    headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
+    arrobas_encontrados = []
+    palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    try:
-        res = requests.post(url, headers=headers, data=payload)
-        
-        # Se a API der erro (ex: falta de crédito), vai mostrar na tela agora!
-        if not res.ok:
-            st.error(f"Erro na API do Serper: {res.text}")
-            return []
+    # Calculamos quantas páginas de 10 precisamos (pedimos o dobro de páginas porque vamos descartar alguns resultados lixo)
+    paginas_necessarias = (qtd // 10) + 4 
+    
+    barra_busca = st.progress(0, text="A contactar o Google de forma segura...")
+    
+    for pagina in range(1, paginas_necessarias + 1):
+        if len(arrobas_encontrados) >= qtd:
+            break
             
-        dados = res.json()
-        arrobas_encontrados = []
+        barra_busca.progress(pagina / paginas_necessarias, text=f"A ler página {pagina} do Google...")
         
-        # Palavras reservadas do Instagram que não são perfis
-        palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
+        # Agora pedimos o padrão seguro: 10 resultados por vez
+        payload = json.dumps({"q": query, "page": pagina, "num": 10}) 
+        headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
         
-        for item in dados.get("organic", []):
-            link = item.get("link", "")
-            # Extrair o nome de utilizador do link
-            match = re.search(r'instagram\.com/([^/?]+)', link)
-            if match:
-                username = match.group(1).strip()
-                # O filtro agora é feito no Python, mais seguro e eficiente
-                if username.lower() not in palavras_ignoradas:
-                    arroba_formatado = f"@{username}"
-                    if arroba_formatado not in arrobas_encontrados:
-                        arrobas_encontrados.append(arroba_formatado)
-                    
-                    if len(arrobas_encontrados) >= qtd:
-                        break
+        try:
+            res = requests.post(url, headers=headers, data=payload)
+            
+            if not res.ok:
+                st.error(f"Erro na API do Serper na página {pagina}: {res.text}")
+                break
+                
+            dados = res.json()
+            organicos = dados.get("organic", [])
+            
+            if not organicos:
+                break # Acabaram os resultados do Google
+                
+            for item in organicos:
+                link = item.get("link", "")
+                match = re.search(r'instagram\.com/([^/?]+)', link)
+                if match:
+                    username = match.group(1).strip()
+                    if username.lower() not in palavras_ignoradas:
+                        arroba_formatado = f"@{username}"
+                        if arroba_formatado not in arrobas_encontrados:
+                            arrobas_encontrados.append(arroba_formatado)
                         
-        return arrobas_encontrados
-    except Exception as e:
-        st.error(f"Erro interno ao buscar perfis: {str(e)}")
-        return []
+                        if len(arrobas_encontrados) >= qtd:
+                            break
+                            
+        except Exception as e:
+            st.error(f"Erro interno ao buscar perfis: {str(e)}")
+            break
+            
+        time.sleep(0.5) # Pausa humana para não dar erro 400
+        
+    barra_busca.empty()
+    return arrobas_encontrados[:qtd] # Devolve exatamente a quantidade pedida
 
 # --- O CÉREBRO DA IA ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
@@ -256,14 +270,14 @@ def desenhar_card_lead(chumbo):
 # 🚀 FUNÇÃO PRINCIPAL DE PROCESSAMENTO
 # ==========================================
 def processar_lista_arrobas(lista_de_arrobas):
-    st.info(f"A processar {len(lista_de_arrobas)} perfis. Isto pode demorar alguns segundos...")
+    st.info(f"A processar {len(lista_de_arrobas)} perfis na IA. Isto pode demorar alguns segundos...")
     
     barra = st.progress(0)
     resultados_aprovados = []
     resultados_reprovados = []
     
     for i, arroba in enumerate(lista_de_arrobas):
-        barra.progress((i + 1) / len(lista_de_arrobas), text=f"A analisar {arroba}...")
+        barra.progress((i + 1) / len(lista_de_arrobas), text=f"A analisar {arroba} na IA...")
         
         bio = buscar_bio_no_google(arroba, api_key_serper)
         
@@ -330,7 +344,7 @@ with aba_garimpo:
                 arrobas_encontrados = garimpar_perfis_google(nicho_alvo, local_alvo, qtd_busca, api_key_serper)
                 
             if not arrobas_encontrados:
-                st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico.")
+                st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico ou verifique sua quota do Serper.")
             else:
                 st.success(f"Foram capturados {len(arrobas_encontrados)} perfis brutos! A iniciar qualificação IA...")
                 processar_lista_arrobas(arrobas_encontrados)
