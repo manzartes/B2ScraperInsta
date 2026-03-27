@@ -71,21 +71,21 @@ with st.sidebar:
             st.session_state["nome_aba"] = NOME_ABA_PADRAO
             
         url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
-        nome_aba = st.text_input("Nome exato da Aba:", value=st.session_state["nome_aba"], help="Ex: Página1, 27/03.")
+        nome_aba = st.text_input("Aba de Entrada (CRM):", value=st.session_state["nome_aba"], help="Para onde vão os leads aprovados.")
         
         st.session_state["url_webhook"] = url_webhook
         st.session_state["nome_aba"] = nome_aba
 
-    with st.expander("🚫 Blacklist Automática", expanded=False):
-        st.markdown("<small>O robô vai ler os leads desta aba e ignorá-los nas buscas.</small>", unsafe_allow_html=True)
+    with st.expander("🚫 Gerenciar Blacklist", expanded=False):
+        st.markdown("<small>Aba da planilha exclusiva para a Lista Negra.</small>", unsafe_allow_html=True)
         if "aba_blacklist" not in st.session_state:
-            st.session_state["aba_blacklist"] = NOME_ABA_PADRAO
+            st.session_state["aba_blacklist"] = "Blacklist" # Sugestão de nome
             
-        aba_blacklist = st.text_input("Aba de Leitura (Blacklist):", value=st.session_state["aba_blacklist"], help="Pode ser a mesma aba do CRM ou outra onde está o histórico antigo.")
+        aba_blacklist = st.text_input("Aba da Blacklist:", value=st.session_state["aba_blacklist"], help="Tem que existir na planilha do Sheets.")
         st.session_state["aba_blacklist"] = aba_blacklist
         
-        st.markdown("<small><i>(Opcional) Adicionar avulsos:</i></small>", unsafe_allow_html=True)
-        blacklist_texto = st.text_area("Arrobas manuais:", height=60, placeholder="@joao\n@clinica_xyz")
+        st.markdown("<small><i>Arrobas manuais avulsos:</i></small>", unsafe_allow_html=True)
+        blacklist_texto = st.text_area("Colar arrobas:", height=60, placeholder="@joao\n@clinica_xyz")
         blacklist_manual = {a.strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in blacklist_texto.split("\n") if a.strip()}
 
     with st.expander("🔑 Chaves de API", expanded=False):
@@ -130,18 +130,15 @@ def puxar_blacklist_automatica():
     aba = st.session_state["aba_blacklist"]
     if not webhook or not aba:
         return set()
-        
     try:
-        # Faz um GET na planilha pedindo a lista da aba informada
         resposta = requests.get(f"{webhook}?aba={aba}")
         if resposta.ok:
             dados = resposta.json()
             if "leads" in dados:
-                # Limpa e formata os links da planilha para "@arroba"
                 lista_suja = dados["leads"]
                 lista_limpa = {str(a).strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in lista_suja if str(a).strip()}
                 return lista_limpa
-    except Exception as e:
+    except Exception:
         pass
     return set()
 
@@ -199,7 +196,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
                         if len(arrobas_encontrados) >= qtd:
                             break
                             
-        except Exception as e:
+        except Exception:
             break
             
         time.sleep(0.5) 
@@ -329,29 +326,67 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         username_limpo = username_limpo.replace('/', '') 
         link_ig = f"https://www.instagram.com/{username_limpo}/"
         
-        col1, col2, col3, col4 = st.columns([1.5, 1, 1, 1])
+        # Agora temos 5 colunas para acomodar o botão de Blacklist
+        col1, col2, col3, col4, col5 = st.columns([1.5, 0.8, 1, 1, 1])
         with col1:
             st.caption(f"**Motivo:** {chumbo['motivo']}")
         with col2:
             st.code(username_limpo, language=None)
         with col3:
             st.link_button("👉 Abrir Insta", link_ig, use_container_width=True, type="primary")
+        
+        # Controle de estado dos botões para essa aba
+        estado_crm_key = f"estado_crm_{chumbo['arroba']}_{contexto}"
+        estado_bl_key = f"estado_bl_{chumbo['arroba']}_{contexto}"
+        
+        if estado_crm_key not in st.session_state:
+            st.session_state[estado_crm_key] = False
+        if estado_bl_key not in st.session_state:
+            st.session_state[estado_bl_key] = False
+
         with col4:
-            dados_planilha = chumbo.copy()
-            dados_planilha["link_ig"] = link_ig
-            dados_planilha["sheet_name"] = st.session_state["nome_aba"]
-            
-            estado_crm_key = f"estado_crm_{chumbo['arroba']}"
-            if estado_crm_key not in st.session_state:
-                st.session_state[estado_crm_key] = False
-                
-            if not st.session_state[estado_crm_key]:
-                if st.button("✅ Enviar CRM", key=f"btn_crm_{chumbo['arroba']}_{contexto}", use_container_width=True):
-                    if enviar_lead_para_planilha(dados_planilha):
+            if not st.session_state[estado_crm_key] and not st.session_state[estado_bl_key]:
+                if st.button("✅ CRM", key=f"btn_crm_{chumbo['arroba']}_{contexto}", use_container_width=True):
+                    # Salva no CRM
+                    dados_crm = chumbo.copy()
+                    dados_crm["link_ig"] = link_ig
+                    dados_crm["sheet_name"] = st.session_state["nome_aba"]
+                    dados_crm["status"] = "Abordado"
+                    
+                    # Salva na Blacklist também (para não voltar nunca mais)
+                    dados_bl = chumbo.copy()
+                    dados_bl["link_ig"] = link_ig
+                    dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
+                    dados_bl["status"] = "Foi pro CRM"
+                    
+                    # Envia os dois requests e adiciona na memória local
+                    if enviar_lead_para_planilha(dados_crm):
+                        if st.session_state["nome_aba"] != st.session_state["aba_blacklist"]:
+                            enviar_lead_para_planilha(dados_bl)
+                            
+                        st.session_state["blacklist_arrobas"].add(chumbo['arroba'])
                         st.session_state[estado_crm_key] = True
+                        st.toast(f"Lead salvo no CRM e enviado para a Blacklist!", icon="✅")
                         st.rerun() 
-            else:
-                st.success("✅ Enviado!")
+            elif st.session_state[estado_crm_key]:
+                st.success("✅ No CRM!")
+
+        with col5:
+            if not st.session_state[estado_crm_key] and not st.session_state[estado_bl_key]:
+                if st.button("🚫 Blacklist", key=f"btn_bl_{chumbo['arroba']}_{contexto}", use_container_width=True):
+                    # Salva APENAS na Blacklist
+                    dados_bl = chumbo.copy()
+                    dados_bl["link_ig"] = link_ig
+                    dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
+                    dados_bl["status"] = "Rejeitado"
+                    
+                    if enviar_lead_para_planilha(dados_bl):
+                        st.session_state["blacklist_arrobas"].add(chumbo['arroba'])
+                        st.session_state[estado_bl_key] = True
+                        st.toast(f"Lead enviado direto para a Blacklist!", icon="🚫")
+                        st.rerun()
+            elif st.session_state[estado_bl_key]:
+                st.warning("🚫 Na Blacklist!")
             
         st.divider()
         st.markdown("**1️⃣ Mensagem Inicial (Diagnóstico)**")
