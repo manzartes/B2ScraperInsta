@@ -32,13 +32,13 @@ if "ultima_busca_local" not in st.session_state:
 if "proxima_pagina" not in st.session_state:
     st.session_state["proxima_pagina"] = 1
 
-# Memória para a tela não apagar (Problema 5)
+# Memória para a tela não apagar
 if "leads_aprovados_tela" not in st.session_state:
     st.session_state["leads_aprovados_tela"] = []
 if "leads_reprovados_tela" not in st.session_state:
     st.session_state["leads_reprovados_tela"] = []
 
-# Blacklist para não repetir leads (Problema 4)
+# Blacklist para não repetir leads
 if "blacklist_arrobas" not in st.session_state:
     st.session_state["blacklist_arrobas"] = set()
 
@@ -79,7 +79,6 @@ with st.sidebar:
     
     st.divider()
     st.markdown("🎯 **Destino na Planilha (CRM):**")
-    # PROBLEMA 1 e 2 RESOLVIDOS: O usuário escolhe a aba aqui e o software respeita.
     url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
     nome_aba = st.text_input("Nome exato da Aba:", value=st.session_state["nome_aba"], help="Ex: Página1, 27/03. Cuidado com espaços extras!")
     
@@ -157,7 +156,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
                     if username.lower() not in palavras_ignoradas:
                         arroba_formatado = f"@{username}"
                         
-                        # PROBLEMA 4 RESOLVIDO: Verifica se já vimos esse cara antes
+                        # Verifica se já vimos esse cara antes na Blacklist ou na busca atual
                         if arroba_formatado not in st.session_state["blacklist_arrobas"] and arroba_formatado not in arrobas_encontrados:
                             arrobas_encontrados.append(arroba_formatado)
                         
@@ -188,8 +187,17 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
                 
         modelo = genai.GenerativeModel(modelo_escolhido.replace("models/", ""))
         
+        treinamento_extra = ""
+        if st.session_state["bons_exemplos"]:
+            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:])
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário GOSTOU destes tipos de perfis recentemente. Use como referência de APROVAÇÃO:\n- {bons}"
+        if st.session_state["maus_exemplos"]:
+            maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário REPROVOU estes tipos de perfis recentemente. Se for parecido com isso, REPROVE:\n- {maus}"
+        
         prompt = f"""
-        Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads.
+        Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
+        
         O seu ICP EXATO é: Dono de pequena/média empresa, Profissional liberal, Consultor/mentor, Médico/odontólogo, Advogado, Corretor/assessor, Gestor/comercial, Executivo, Engenheiro/arquiteto.
 
         CRITÉRIOS:
@@ -198,6 +206,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         3. Bio bagunçada ou Posicionamento fraco: APROVAR.
         4. Perfil Privado: Se "This account is private" ou "Conta privada", REPROVAR IMEDIATAMENTE.
         *Atenção*: Se não houver dados exatos para reprovar, APROVE.
+        {treinamento_extra}
 
         Resumo do Google para a conta {arroba}: "{snippet_google}"
 
@@ -252,9 +261,9 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar."
 
 # ==========================================
-# 🎨 DESIGN DA CAIXA DO LEAD
+# 🎨 DESIGN DA CAIXA DO LEAD (Com 'Contexto' para evitar erros)
 # ==========================================
-def desenhar_card_lead(chumbo):
+def desenhar_card_lead(chumbo, contexto="geral"):
     with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado", expanded=False):
         username_limpo = chumbo['arroba'].replace('@', '').strip()
         username_limpo = re.sub(r'(https?://)?(www\.)?instagram\.com/', '', username_limpo)
@@ -273,16 +282,16 @@ def desenhar_card_lead(chumbo):
             dados_planilha["link_ig"] = link_ig
             dados_planilha["sheet_name"] = st.session_state["nome_aba"]
             
-            # Botão de Enviar CRM blindado (não apaga a tela)
-            btn_key = f"crm_{chumbo['arroba']}"
-            if btn_key not in st.session_state:
-                st.session_state[btn_key] = False
+            # Botão de Enviar CRM blindado com contexto único
+            estado_crm_key = f"estado_crm_{chumbo['arroba']}"
+            if estado_crm_key not in st.session_state:
+                st.session_state[estado_crm_key] = False
                 
-            if not st.session_state[btn_key]:
-                if st.button("✅ Enviar CRM", key=f"btn_{btn_key}", use_container_width=True):
+            if not st.session_state[estado_crm_key]:
+                if st.button("✅ Enviar CRM", key=f"btn_crm_{chumbo['arroba']}_{contexto}", use_container_width=True):
                     if enviar_lead_para_planilha(dados_planilha):
-                        st.session_state[btn_key] = True
-                        st.rerun() # Atualiza pra mostrar que enviou, mas como a tela tá salva, não apaga!
+                        st.session_state[estado_crm_key] = True
+                        st.rerun() 
             else:
                 st.success("✅ Enviado!")
             
@@ -290,6 +299,24 @@ def desenhar_card_lead(chumbo):
         st.code(chumbo.get('script_1', ''), language="markdown")
         st.code(chumbo.get('script_2', ''), language="markdown")
         st.code(chumbo.get('script_3', ''), language="markdown")
+        
+        st.divider()
+        
+        st.markdown("**A IA acertou neste perfil? (Ajude-a a aprender)**")
+        if chumbo['arroba'] not in st.session_state["feedbacks_dados"]:
+            col_fb1, col_fb2, _ = st.columns([1, 1, 2])
+            with col_fb1:
+                if st.button("👍 Sim, buscar parecidos", key=f"up_{chumbo['arroba']}_{contexto}"):
+                    st.session_state["bons_exemplos"].append(chumbo.get('bio', ''))
+                    st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    st.rerun()
+            with col_fb2:
+                if st.button("👎 Não, perfil ruim", key=f"down_{chumbo['arroba']}_{contexto}"):
+                    st.session_state["maus_exemplos"].append(chumbo.get('bio', ''))
+                    st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    st.rerun()
+        else:
+            st.success("✅ Feedback registrado!")
 
 # ==========================================
 # 🚀 FUNÇÃO DE PROCESSAMENTO BLINDADA
@@ -302,7 +329,6 @@ def processar_lista_arrobas(lista_de_arrobas):
     for i, arroba in enumerate(lista_de_arrobas):
         barra.progress((i + 1) / len(lista_de_arrobas), text=f"Analisando {arroba} na IA...")
         
-        # Coloca o lead na Blacklist para nunca mais pesquisar ele hoje
         st.session_state["blacklist_arrobas"].add(arroba)
         
         bio = buscar_bio_no_google(arroba, st.session_state["api_key_serper"])
@@ -328,14 +354,14 @@ def processar_lista_arrobas(lista_de_arrobas):
     barra.empty()
 
 # ==========================================
-# 🖥️ RENDERIZAR TELA ATUAL (Evita apagar)
+# 🖥️ RENDERIZAR TELA ATUAL (Com identificador de aba)
 # ==========================================
-def renderizar_resultados_garimpo():
+def renderizar_resultados_garimpo(contexto_render):
     if st.session_state["leads_aprovados_tela"]:
         st.divider()
         st.subheader(f"✅ {len(st.session_state['leads_aprovados_tela'])} Leads Aprovados")
         for chumbo in st.session_state["leads_aprovados_tela"]:
-            desenhar_card_lead(chumbo)
+            desenhar_card_lead(chumbo, contexto=contexto_render)
             
     if st.session_state["leads_reprovados_tela"]:
         st.subheader(f"❌ {len(st.session_state['leads_reprovados_tela'])} Leads Descartados")
@@ -388,8 +414,7 @@ with aba_garimpo:
             else:
                 st.warning("Fim dos resultados ou só vieram repetidos. Tente outro nicho!")
 
-    # Renderiza os leads na tela SEMPRE (assim eles não somem no Rerun do botão)
-    renderizar_resultados_garimpo()
+    renderizar_resultados_garimpo("garimpo")
 
 with aba_busca:
     st.subheader("Processar Lista Própria")
@@ -398,7 +423,8 @@ with aba_busca:
         if lista_arrobas.strip():
             arrobas = [a.strip() for a in lista_arrobas.split("\n") if a.strip()]
             processar_lista_arrobas(arrobas)
-    renderizar_resultados_garimpo()
+    
+    renderizar_resultados_garimpo("busca_manual")
 
 with aba_historico:
     st.subheader("📚 Seus Leads Qualificados")
@@ -406,7 +432,7 @@ with aba_historico:
         st.info("Nenhum lead qualificado ainda.")
     else:
         for chumbo in st.session_state["historico_leads"]:
-            desenhar_card_lead(chumbo)
+            desenhar_card_lead(chumbo, contexto="historico")
 
 with aba_crm:
     st.subheader("📊 Planilha CRM Integrada")
