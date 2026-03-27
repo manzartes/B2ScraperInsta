@@ -26,6 +26,7 @@ with col_botoes:
     st.write("") 
     st.write("")
     st.link_button("💼 Ir para B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
+    st.link_button("🕵️ Dossiê ABM", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
 
 # --- Configurações na Barra Lateral ---
