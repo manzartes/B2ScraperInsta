@@ -11,15 +11,16 @@ st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
 # ==========================================
-# Usamos o .get() para não quebrar o app caso você ainda não tenha configurado na nuvem
 try:
     CHAVE_SERPER_PADRAO = st.secrets.get("CHAVE_SERPER", "")
     CHAVE_GEMINI_PADRAO = st.secrets.get("CHAVE_GEMINI", "")
     URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
+    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "Página1") # Puxa o nome da aba se estiver nos secrets
 except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
     URL_WEBHOOK_PLANILHA = ""
+    NOME_ABA_PADRAO = "Página1"
 
 # --- INICIALIZANDO MEMÓRIA E HISTÓRICO ---
 if "historico_leads" not in st.session_state:
@@ -55,21 +56,27 @@ with col_botoes:
 with st.sidebar:
     st.header("⚙️ Configurações")
     
-    # Carrega os valores padrão (dos Secrets) para o state se estiverem vazios
     if "api_key_serper" not in st.session_state:
         st.session_state["api_key_serper"] = CHAVE_SERPER_PADRAO
     if "api_key_gemini" not in st.session_state:
         st.session_state["api_key_gemini"] = CHAVE_GEMINI_PADRAO
     if "url_webhook" not in st.session_state:
         st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
+    if "nome_aba" not in st.session_state:
+        st.session_state["nome_aba"] = NOME_ABA_PADRAO
 
     api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state["api_key_serper"])
     api_key_gemini = st.text_input("API Key do Google Gemini:", type="password", value=st.session_state["api_key_gemini"])
-    url_webhook = st.text_input("URL do Webhook (Planilha):", type="password", value=st.session_state["url_webhook"], help="URL do Google Apps Script para salvar dados.")
+    
+    st.divider()
+    st.markdown("**Destino do CRM:**")
+    url_webhook = st.text_input("URL do Webhook (Nova):", type="password", value=st.session_state["url_webhook"])
+    nome_aba = st.text_input("Nome exato da Aba na Planilha:", value=st.session_state["nome_aba"], help="Exemplo: Página1, Leads, Prospects. Tem que ser igualzinho tá no Google Sheets.")
     
     st.session_state["api_key_serper"] = api_key_serper
     st.session_state["api_key_gemini"] = api_key_gemini
     st.session_state["url_webhook"] = url_webhook
+    st.session_state["nome_aba"] = nome_aba
     
     st.divider()
     st.markdown("**Seu Perfil (BDR):**")
@@ -83,15 +90,15 @@ with st.sidebar:
 def enviar_lead_para_planilha(lead_dados):
     webhook = st.session_state["url_webhook"]
     if not webhook:
-        st.error("Configure a URL do Webhook na barra lateral (ou nos Secrets) primeiro!")
+        st.error("Configure a URL do Webhook na barra lateral primeiro!")
         return False
     
     try:
         resposta = requests.post(webhook, json=lead_dados)
-        if resposta.ok:
+        if resposta.ok and "Sucesso" in resposta.text:
             return True
         else:
-            st.error("Falha ao salvar. Verifique se o webhook está correto.")
+            st.error(f"Erro na Planilha: {resposta.text}")
             return False
     except Exception as e:
         st.error(f"Erro de conexão com a planilha: {e}")
@@ -157,7 +164,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- O CÉREBRO DA IA (Com Regras Avançadas e Treinamento) ---
+# --- O CÉREBRO DA IA ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
@@ -166,7 +173,6 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         if not modelos_disponiveis:
             return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de IA."}
             
-        # Pega a versão mais potente (flash)
         modelo_escolhido = modelos_disponiveis[0]
         for nome in modelos_disponiveis:
             if 'flash' in nome:
@@ -314,10 +320,12 @@ def desenhar_card_lead(chumbo):
         with col4:
             dados_planilha = chumbo.copy()
             dados_planilha["link_ig"] = link_ig
+            # Agora injetamos o nome da aba para o Google Apps Script saber pra onde mandar
+            dados_planilha["sheet_name"] = st.session_state["nome_aba"]
             
             if st.button("✅ Enviar CRM", key=f"crm_{chumbo['arroba']}", use_container_width=True):
                 if enviar_lead_para_planilha(dados_planilha):
-                    st.toast(f"Lead salvo na planilha com sucesso!", icon="✅")
+                    st.toast(f"Lead salvo na aba {st.session_state['nome_aba']} com sucesso!", icon="✅")
             
         st.divider()
         
