@@ -31,11 +31,11 @@ if "proxima_pagina" not in st.session_state:
 col_titulo, col_botoes = st.columns([3, 1])
 with col_titulo:
     st.title("⚡ Máquina de Garimpo e Qualificação")
-    st.markdown("Encontre perfis automaticamente pelo Google, qualifique o ICP com Inteligência Artificial e gere os scripts de vendas prontos a copiar.")
+    st.markdown("Encontre perfis automaticamente pelo Google, qualifique o ICP com Inteligência Artificial e gere os scripts de vendas prontos para copiar.")
 with col_botoes:
     st.write("") 
     st.write("")
-    st.link_button("📊 Planilha de Controlo", "https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?gid=1396779725#gid=1396779725", use_container_width=True)
+    st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1PZimYKWupEv3x_pR9AVnl_mquBuUFfX0gWPO9iCpGFQ/edit?gid=1396779725#gid=1396779725", use_container_width=True)
     st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
     st.link_button("🕵️ Dossiê ABM", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
@@ -55,8 +55,8 @@ with st.sidebar:
     st.session_state["api_key_gemini"] = api_key_gemini
     
     st.divider()
-    st.markdown("**O Seu Perfil (BDR):**")
-    seu_nome = st.text_input("O Seu Nome:", value="Henrique Durant")
+    st.markdown("**Seu Perfil (BDR):**")
+    seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
     anos_exp = st.text_input("Anos de Experiência:", value="5")
 
 # --- MOTOR DE GARIMPO (PAGINADO E SEGURO) ---
@@ -72,7 +72,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     paginas_necessarias = (qtd // 10) + 4 
     ultima_pagina_pesquisada = pagina_inicial
     
-    barra_busca = st.progress(0, text="A contactar o Google de forma segura...")
+    barra_busca = st.progress(0, text="Contatando o Google de forma segura...")
     
     for pagina in range(pagina_inicial, pagina_inicial + paginas_necessarias):
         ultima_pagina_pesquisada = pagina
@@ -80,7 +80,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
             break
             
         progresso = min((pagina - pagina_inicial) / paginas_necessarias, 1.0)
-        barra_busca.progress(progresso, text=f"A ler página {pagina} do Google...")
+        barra_busca.progress(progresso, text=f"Lendo página {pagina} do Google...")
         
         payload = json.dumps({"q": query, "page": pagina, "num": 10}) 
         headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
@@ -120,13 +120,28 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- O CÉREBRO DA IA ---
+# --- O CÉREBRO DA IA (Auto-Seleção Inteligente) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
         
-        # Forçando o modelo 1.5-flash que é um trator para processar grandes volumes rapidamente
-        modelo = genai.GenerativeModel('gemini-1.5-flash')
+        # Puxa dinamicamente a lista de modelos da SUA conta
+        modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        if not modelos_disponiveis:
+            return {"status": "ERRO", "motivo": "Sua chave não tem acesso a nenhum modelo de IA.", "script_1": "", "script_2": "", "script_3": ""}
+            
+        # Prioriza o modelo flash mais recente disponível na sua conta
+        modelo_escolhido = modelos_disponiveis[0]
+        for nome in modelos_disponiveis:
+            if '1.5-flash' in nome:
+                modelo_escolhido = nome
+                break
+            elif 'flash' in nome or 'pro' in nome:
+                modelo_escolhido = nome
+                
+        nome_limpo = modelo_escolhido.replace("models/", "")
+        modelo = genai.GenerativeModel(nome_limpo)
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -247,7 +262,7 @@ def desenhar_card_lead(chumbo):
         
         col_motivo, col_botao = st.columns([3, 1])
         with col_motivo:
-            st.caption(f"**Porquê passou:** {chumbo['motivo']}")
+            st.caption(f"**Por que passou:** {chumbo['motivo']}")
         with col_botao:
             st.link_button("👉 Abrir Instagram", link_ig, use_container_width=True, type="primary")
             
@@ -266,14 +281,14 @@ def desenhar_card_lead(chumbo):
 # 🚀 FUNÇÃO PRINCIPAL DE PROCESSAMENTO
 # ==========================================
 def processar_lista_arrobas(lista_de_arrobas):
-    st.info(f"A processar {len(lista_de_arrobas)} perfis na IA. Isto pode demorar alguns segundos...")
+    st.info(f"Processando {len(lista_de_arrobas)} perfis na IA. Isso pode demorar alguns segundos...")
     
     barra = st.progress(0)
     resultados_aprovados = []
     resultados_reprovados = []
     
     for i, arroba in enumerate(lista_de_arrobas):
-        barra.progress((i + 1) / len(lista_de_arrobas), text=f"A analisar {arroba} na IA...")
+        barra.progress((i + 1) / len(lista_de_arrobas), text=f"Analisando {arroba} na IA...")
         
         bio = buscar_bio_no_google(arroba, api_key_serper)
         
@@ -300,7 +315,6 @@ def processar_lista_arrobas(lista_de_arrobas):
         else:
             resultados_reprovados.append({"arroba": arroba, "motivo": "Perfil fechado ou não indexado no Google."})
         
-        # Como você está num plano pago agora, um tempo de pausa menor (1.5s) é perfeitamente seguro
         time.sleep(1.5)
     
     barra.empty()
@@ -314,7 +328,6 @@ def processar_lista_arrobas(lista_de_arrobas):
         st.subheader(f"❌ {len(resultados_reprovados)} Leads Descartados")
         for lixo in resultados_reprovados:
             st.write(f"- **{lixo['arroba']}**: {lixo['motivo']}")
-
 
 # --- INTERFACE COM ABAS ---
 aba_garimpo, aba_busca, aba_historico = st.tabs(["🔍 Garimpo Automático", "📝 Colar @Arrobas Manualmente", "📚 Histórico de Leads Salvos"])
@@ -342,23 +355,23 @@ with aba_garimpo:
             st.session_state["ultima_busca_local"] = local_alvo
             st.session_state["proxima_pagina"] = 1
             
-            with st.spinner(f"A varrer a internet à procura de {nicho_alvo}..."):
+            with st.spinner(f"Varrendo a internet atrás de {nicho_alvo}..."):
                 arrobas_encontrados, prox_pag = garimpar_perfis_google(nicho_alvo, local_alvo, qtd_busca, api_key_serper, 1)
                 st.session_state["proxima_pagina"] = prox_pag
                 
             if not arrobas_encontrados:
                 st.warning("Não foram encontrados perfis suficientes com estes termos. Tente ser mais genérico ou verifique sua quota do Serper.")
             else:
-                st.success(f"Foram capturados {len(arrobas_encontrados)} perfis brutos! A iniciar qualificação IA...")
+                st.success(f"Foram capturados {len(arrobas_encontrados)} perfis brutos! Iniciando qualificação na IA...")
                 processar_lista_arrobas(arrobas_encontrados)
 
-    # BOTÃO MÁGICO "PESQUISAR MAIS 10" (Só aparece depois que você fez a primeira busca)
+    # BOTÃO MÁGICO "PESQUISAR MAIS 10" 
     if st.session_state["ultima_busca_nicho"]:
         st.divider()
         st.markdown(f"**Continuar o garimpo anterior:** *{st.session_state['ultima_busca_nicho']}* em *{st.session_state['ultima_busca_local']}*")
         
         if st.button("➕ Pesquisar Mais 10 Leads", type="secondary", use_container_width=True):
-            with st.spinner(f"A folhear o Google (Página {st.session_state['proxima_pagina']})..."):
+            with st.spinner(f"Folheando o Google (Página {st.session_state['proxima_pagina']})..."):
                 arrobas_encontrados, prox_pag = garimpar_perfis_google(
                     st.session_state["ultima_busca_nicho"], 
                     st.session_state["ultima_busca_local"], 
@@ -371,7 +384,7 @@ with aba_garimpo:
             if not arrobas_encontrados:
                 st.warning("Parece que chegamos ao fim dos resultados do Google para esta pesquisa. Tente outro nicho ou cidade!")
             else:
-                st.success(f"Mais {len(arrobas_encontrados)} perfis capturados da próxima página! A qualificar...")
+                st.success(f"Mais {len(arrobas_encontrados)} perfis capturados da próxima página! Qualificando...")
                 processar_lista_arrobas(arrobas_encontrados)
 
 with aba_busca:
@@ -388,11 +401,11 @@ with aba_busca:
             processar_lista_arrobas(arrobas)
 
 with aba_historico:
-    st.subheader("📚 Os Seus Leads Qualificados")
-    st.markdown("Aqui ficam guardados os leads que já aprovou. Volte aqui para copiar as mensagens de **Follow-up** (2 ou 4 dias). *Eles desaparecerão se fechar a aba do navegador.*")
+    st.subheader("📚 Seus Leads Qualificados")
+    st.markdown("Aqui ficam salvos os leads que você já aprovou. Volte aqui para copiar as mensagens de **Follow-up** (2 ou 4 dias). *Eles sumirão se você fechar a aba do navegador.*")
     
     if not st.session_state["historico_leads"]:
-        st.info("Nenhum lead qualificado ainda. Volte às abas anteriores e processe a sua primeira lista!")
+        st.info("Nenhum lead qualificado ainda. Volte nas abas anteriores e processe a sua primeira lista!")
     else:
         for chumbo in st.session_state["historico_leads"]:
             desenhar_card_lead(chumbo)
