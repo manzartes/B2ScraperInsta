@@ -27,6 +27,8 @@ if "historico_leads" not in st.session_state:
     st.session_state["historico_leads"] = []
 if "ultima_busca_nicho" not in st.session_state:
     st.session_state["ultima_busca_nicho"] = ""
+if "ultima_busca_hashtag" not in st.session_state:
+    st.session_state["ultima_busca_hashtag"] = ""
 if "ultima_busca_local" not in st.session_state:
     st.session_state["ultima_busca_local"] = ""
 if "proxima_pagina" not in st.session_state:
@@ -79,7 +81,7 @@ with st.sidebar:
     with st.expander("🚫 Gerenciar Blacklist", expanded=False):
         st.markdown("<small>Aba da planilha exclusiva para a Lista Negra.</small>", unsafe_allow_html=True)
         if "aba_blacklist" not in st.session_state:
-            st.session_state["aba_blacklist"] = "Blacklist" # Sugestão de nome
+            st.session_state["aba_blacklist"] = "Blacklist"
             
         aba_blacklist = st.text_input("Aba da Blacklist:", value=st.session_state["aba_blacklist"], help="Tem que existir na planilha do Sheets.")
         st.session_state["aba_blacklist"] = aba_blacklist
@@ -142,10 +144,18 @@ def puxar_blacklist_automatica():
         pass
     return set()
 
-# --- MOTOR DE GARIMPO (COM BLACKLIST ABSOLUTA) ---
-def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inicial=1):
+# --- MOTOR DE GARIMPO (COM HASHTAG E BLACKLIST ABSOLUTA) ---
+def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
-    query = f'site:instagram.com "{profissao}"'
+    
+    # Construção inteligente da Query
+    query = 'site:instagram.com'
+    if profissao:
+        query += f' "{profissao}"'
+    if hashtag:
+        # Garante que a hashtag tem o # mesmo se o usuário não digitar
+        hash_term = hashtag if hashtag.startswith("#") else f"#{hashtag}"
+        query += f' "{hash_term}"'
     if localizacao:
         query += f' "{localizacao}"'
     
@@ -187,6 +197,7 @@ def garimpar_perfis_google(profissao, localizacao, qtd, api_serper, pagina_inici
                 match = re.search(r'instagram\.com/([^/?]+)', link)
                 if match:
                     username = match.group(1).strip()
+                    # Ignora links soltos que não são perfis
                     if username.lower() not in palavras_ignoradas:
                         arroba_formatado = f"@{username}"
                         
@@ -326,7 +337,6 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         username_limpo = username_limpo.replace('/', '') 
         link_ig = f"https://www.instagram.com/{username_limpo}/"
         
-        # Agora temos 5 colunas para acomodar o botão de Blacklist
         col1, col2, col3, col4, col5 = st.columns([1.5, 0.8, 1, 1, 1])
         with col1:
             st.caption(f"**Motivo:** {chumbo['motivo']}")
@@ -335,7 +345,6 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         with col3:
             st.link_button("👉 Abrir Insta", link_ig, use_container_width=True, type="primary")
         
-        # Controle de estado dos botões para essa aba
         estado_crm_key = f"estado_crm_{chumbo['arroba']}_{contexto}"
         estado_bl_key = f"estado_bl_{chumbo['arroba']}_{contexto}"
         
@@ -347,19 +356,16 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         with col4:
             if not st.session_state[estado_crm_key] and not st.session_state[estado_bl_key]:
                 if st.button("✅ CRM", key=f"btn_crm_{chumbo['arroba']}_{contexto}", use_container_width=True):
-                    # Salva no CRM
                     dados_crm = chumbo.copy()
                     dados_crm["link_ig"] = link_ig
                     dados_crm["sheet_name"] = st.session_state["nome_aba"]
                     dados_crm["status"] = "Abordado"
                     
-                    # Salva na Blacklist também (para não voltar nunca mais)
                     dados_bl = chumbo.copy()
                     dados_bl["link_ig"] = link_ig
                     dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
                     dados_bl["status"] = "Foi pro CRM"
                     
-                    # Envia os dois requests e adiciona na memória local
                     if enviar_lead_para_planilha(dados_crm):
                         if st.session_state["nome_aba"] != st.session_state["aba_blacklist"]:
                             enviar_lead_para_planilha(dados_bl)
@@ -374,7 +380,6 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         with col5:
             if not st.session_state[estado_crm_key] and not st.session_state[estado_bl_key]:
                 if st.button("🚫 Blacklist", key=f"btn_bl_{chumbo['arroba']}_{contexto}", use_container_width=True):
-                    # Salva APENAS na Blacklist
                     dados_bl = chumbo.copy()
                     dados_bl["link_ig"] = link_ig
                     dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
@@ -471,46 +476,58 @@ aba_garimpo, aba_busca, aba_historico, aba_crm = st.tabs(["🔍 Garimpo", "📝 
 
 with aba_garimpo:
     st.subheader("Encontrar e Qualificar Leads de forma automática")
-    col1, col2, col3 = st.columns([2, 2, 1])
+    col1, col2, col3, col4 = st.columns([1.5, 1.5, 1.5, 1])
     with col1:
-        nicho_alvo = st.text_input("Nicho / Profissão:", placeholder="Ex: Advogado Tributarista")
+        nicho_alvo = st.text_input("Nicho / Profissão:", placeholder="Ex: Arquiteto")
     with col2:
-        local_alvo = st.text_input("Localização (Opcional):", placeholder="Ex: São Paulo")
+        hashtag_alvo = st.text_input("Hashtag (Opcional):", placeholder="Ex: #decoracao")
     with col3:
-        qtd_busca = st.number_input("Qtd. Máxima:", min_value=5, max_value=50, value=15, step=5)
+        local_alvo = st.text_input("Localização (Opcional):", placeholder="Ex: São Paulo")
+    with col4:
+        qtd_busca = st.number_input("Qtd:", min_value=5, max_value=50, value=15, step=5)
         
     if st.button("🔍 Iniciar Nova Busca", type="primary", use_container_width=True):
         if not st.session_state["api_key_serper"] or not st.session_state["api_key_gemini"]:
             st.error("Preencha as duas API Keys na barra lateral!")
-        elif not nicho_alvo:
-            st.warning("Preencha o Nicho/Profissão.")
+        elif not nicho_alvo and not hashtag_alvo:
+            st.warning("Preencha o Nicho/Profissão ou uma Hashtag.")
         else:
             st.session_state["ultima_busca_nicho"] = nicho_alvo
+            st.session_state["ultima_busca_hashtag"] = hashtag_alvo
             st.session_state["ultima_busca_local"] = local_alvo
             st.session_state["proxima_pagina"] = 1
             
-            with st.spinner(f"Varrendo a internet atrás de {nicho_alvo}..."):
-                arrobas, prox_pag = garimpar_perfis_google(nicho_alvo, local_alvo, qtd_busca, st.session_state["api_key_serper"], 1)
+            with st.spinner(f"Varrendo a internet..."):
+                arrobas, prox_pag = garimpar_perfis_google(nicho_alvo, hashtag_alvo, local_alvo, qtd_busca, st.session_state["api_key_serper"], 1)
                 st.session_state["proxima_pagina"] = prox_pag
                 
             if arrobas:
                 processar_lista_arrobas(arrobas)
             else:
-                st.warning("Não foram encontrados novos perfis (todos os encontrados já estavam na sua Blacklist). Tente outro nicho!")
+                st.warning("Não foram encontrados novos perfis (todos os encontrados já estavam na sua Blacklist). Tente novos termos!")
 
-    if st.session_state["ultima_busca_nicho"]:
-        st.markdown(f"**Continuar o garimpo:** *{st.session_state['ultima_busca_nicho']}* em *{st.session_state['ultima_busca_local']}*")
+    if st.session_state["ultima_busca_nicho"] or st.session_state["ultima_busca_hashtag"]:
+        texto_busca = f"*{st.session_state['ultima_busca_nicho']}*" if st.session_state['ultima_busca_nicho'] else ""
+        if st.session_state['ultima_busca_hashtag']:
+            texto_busca += f" *{st.session_state['ultima_busca_hashtag']}*"
+        if st.session_state['ultima_busca_local']:
+            texto_busca += f" em *{st.session_state['ultima_busca_local']}*"
+            
+        st.markdown(f"**Continuar o garimpo:** {texto_busca}")
+        
         if st.button("➕ Pesquisar Mais 10 Novos Leads", type="secondary", use_container_width=True):
             with st.spinner(f"Folheando o Google (Página {st.session_state['proxima_pagina']})..."):
                 arrobas, prox_pag = garimpar_perfis_google(
-                    st.session_state["ultima_busca_nicho"], st.session_state["ultima_busca_local"], 
+                    st.session_state["ultima_busca_nicho"], 
+                    st.session_state["ultima_busca_hashtag"],
+                    st.session_state["ultima_busca_local"], 
                     10, st.session_state["api_key_serper"], st.session_state["proxima_pagina"]
                 )
                 st.session_state["proxima_pagina"] = prox_pag
             if arrobas:
                 processar_lista_arrobas(arrobas)
             else:
-                st.warning("Fim dos resultados ou só vieram repetidos. Tente outro nicho!")
+                st.warning("Fim dos resultados ou só vieram repetidos. Tente novos termos!")
 
     renderizar_resultados_garimpo("garimpo")
 
