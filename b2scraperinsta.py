@@ -20,7 +20,7 @@ except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
     URL_WEBHOOK_PLANILHA = ""
-    NOME_ABA_PADRAO = "Página1"
+    NOME_ABA_PADRAO = "MARÇO/26"
 
 # --- INICIALIZANDO MEMÓRIAS BLINDADAS ---
 if "historico_leads" not in st.session_state:
@@ -94,7 +94,7 @@ if "memoria_carregada" not in st.session_state:
 # --- Layout do Cabeçalho ---
 col_titulo, col_botoes = st.columns([3, 1])
 with col_titulo:
-    st.title("⚡ Máquina de Garimpo e Qualificação")
+    st.title("⚡ B2Scraper Insta")
     st.markdown("Encontre perfis, qualifique com IA e mande para a aba certa do CRM com 1 clique.")
 with col_botoes:
     st.write("") 
@@ -123,7 +123,7 @@ with st.sidebar:
     with st.expander("🚫 Gerenciar Blacklist", expanded=False):
         st.markdown("<small>Aba da planilha exclusiva para a Lista Negra.</small>", unsafe_allow_html=True)
         if "aba_blacklist" not in st.session_state:
-            st.session_state["aba_blacklist"] = "Blacklist"
+            st.session_state["aba_blacklist"] = "BLACKLIST"
             
         aba_blacklist = st.text_input("Aba da Blacklist:", value=st.session_state["aba_blacklist"], help="Tem que existir na planilha do Sheets.")
         st.session_state["aba_blacklist"] = aba_blacklist
