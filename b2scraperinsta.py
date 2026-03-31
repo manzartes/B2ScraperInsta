@@ -6,7 +6,7 @@ import time
 import re
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="B2SCraper Insta", page_icon="⚡", layout="wide")
 
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
