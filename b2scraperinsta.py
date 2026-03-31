@@ -144,25 +144,25 @@ def puxar_blacklist_automatica():
         pass
     return set()
 
-# --- MOTOR DE GARIMPO (HASHTAG LIVRE + BLACKLIST) ---
+# --- MOTOR DE GARIMPO (COM EXCLUSÃO DE POSTS E REELS) ---
 def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     
-    # Construção inteligente da Query
-    query = 'site:instagram.com'
+    # HACK AVANÇADO: Proibir o Google de trazer fotos e reels, forçando a procura apenas em perfis
+    query = 'site:instagram.com -inurl:p -inurl:reel -inurl:explore -inurl:tags'
+    
     if profissao:
         query += f' "{profissao}"'
     if hashtag:
-        # Removi as aspas duplas da hashtag para o Google buscar livremente nas páginas
         hash_term = hashtag if hashtag.startswith("#") else f"#{hashtag}"
-        query += f' {hash_term}'
+        query += f' "{hash_term}"'
     if localizacao:
         query += f' "{localizacao}"'
     
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    barra_busca = st.progress(0, text="Sincronizando Blacklist com a Planilha...")
+    barra_busca = st.progress(0, text="A sincronizar a Blacklist com a Planilha...")
     blacklist_da_nuvem = puxar_blacklist_automatica()
     blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual).union(blacklist_da_nuvem)
     
@@ -175,7 +175,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
             break
             
         progresso = min((pagina - pagina_inicial) / paginas_necessarias, 1.0)
-        barra_busca.progress(progresso, text=f"Lendo página {pagina} do Google...")
+        barra_busca.progress(progresso, text=f"A ler a página {pagina} do Google...")
         
         payload = json.dumps({"q": query, "page": pagina, "num": 10}) 
         headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
@@ -214,14 +214,14 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (ENXUTO - APENAS 1º CONTATO) ---
+# --- CÉREBRO DA IA (ENXUTO - APENAS 1º CONTACTO) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
         modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
         
         if not modelos_disponiveis:
-            return {"status": "ERRO", "motivo": "Sem acesso a IA."}
+            return {"status": "ERRO", "motivo": "Sem acesso à IA."}
             
         modelo_escolhido = modelos_disponiveis[0]
         for nome in modelos_disponiveis:
@@ -233,10 +233,10 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         treinamento_extra = ""
         if st.session_state["bons_exemplos"]:
             bons = "\n- ".join(st.session_state["bons_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário GOSTOU destes perfis recentemente. APROVE parecidos:\n- {bons}"
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador GOSTOU destes perfis recentemente. APROVE parecidos:\n- {bons}"
         if st.session_state["maus_exemplos"]:
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O usuário REPROVOU estes perfis recentemente. REPROVE parecidos:\n- {maus}"
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis recentemente. REPROVE parecidos:\n- {maus}"
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -253,9 +253,9 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
 
         Resumo do Google para a conta {arroba}: "{snippet_google}"
 
-        Sua tarefa: Descubra Nome, Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere O SCRIPT INICIAL de abordagem.
+        Sua tarefa: Descubra o Nome e a Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere APENAS O SCRIPT INICIAL de abordagem.
         
-        🚨 REGRA DE FORMATAÇÃO EXTREMA: Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. Isso é fundamental para a escaneabilidade do lead. No JSON, use "\\n\\n" para representar essas quebras de linha entre os parágrafos.
+        🚨 REGRA DE FORMATAÇÃO EXTREMA: Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. No JSON, use "\\n\\n" para representar essas quebras de linha.
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
@@ -281,8 +281,10 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         
         Posso compartilhar essas observações?
 
-        Retorne APENAS um objeto JSON válido (sem markdown):
-        "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio"
+        Retorne APENAS um objeto JSON válido (sem marcação markdown):
+        "status": "APROVADO" ou "REPROVADO",
+        "motivo": "justificativa curta",
+        "script_1": "texto ou vazio"
         """
         
         resposta = modelo.generate_content(prompt)
@@ -306,7 +308,7 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar."
 
 # ==========================================
-# 🎨 DESIGN DA CAIXA DO LEAD (UI LIMPA)
+# 🎨 DESIGN DA CAIXA DO LEAD
 # ==========================================
 def desenhar_card_lead(chumbo, contexto="geral"):
     with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado", expanded=False):
@@ -342,7 +344,7 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                     dados_bl = chumbo.copy()
                     dados_bl["link_ig"] = link_ig
                     dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
-                    dados_bl["status"] = "Foi pro CRM"
+                    dados_bl["status"] = "Foi para o CRM"
                     
                     if enviar_lead_para_planilha(dados_crm):
                         if st.session_state["nome_aba"] != st.session_state["aba_blacklist"]:
@@ -390,7 +392,7 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                     st.session_state["feedbacks_dados"].append(chumbo['arroba'])
                     st.rerun()
         else:
-            st.success("✅ Feedback registrado!")
+            st.success("✅ Feedback registado!")
 
 # ==========================================
 # 🚀 FUNÇÃO DE PROCESSAMENTO BLINDADA
@@ -401,7 +403,7 @@ def processar_lista_arrobas(lista_de_arrobas):
     
     barra = st.progress(0)
     for i, arroba in enumerate(lista_de_arrobas):
-        barra.progress((i + 1) / len(lista_de_arrobas), text=f"Analisando {arroba} na IA...")
+        barra.progress((i + 1) / len(lista_de_arrobas), text=f"A analisar {arroba} na IA...")
         
         st.session_state["blacklist_arrobas"].add(arroba)
         
@@ -427,7 +429,7 @@ def processar_lista_arrobas(lista_de_arrobas):
     barra.empty()
 
 # ==========================================
-# 🖥️ RENDERIZAR TELA ATUAL
+# 🖥️ RENDERIZAR ECRÃ ATUAL
 # ==========================================
 def renderizar_resultados_garimpo(contexto_render):
     if st.session_state["leads_aprovados_tela"]:
@@ -458,7 +460,7 @@ with aba_garimpo:
         
     if st.button("🔍 Iniciar Nova Busca", type="primary", use_container_width=True):
         if not st.session_state["api_key_serper"] or not st.session_state["api_key_gemini"]:
-            st.error("Preencha as duas API Keys na barra lateral!")
+            st.error("Preencha as duas API Keys no painel lateral!")
         elif not nicho_alvo and not hashtag_alvo:
             st.warning("Preencha o Nicho/Profissão ou uma Hashtag.")
         else:
@@ -467,14 +469,14 @@ with aba_garimpo:
             st.session_state["ultima_busca_local"] = local_alvo
             st.session_state["proxima_pagina"] = 1
             
-            with st.spinner(f"Varrendo a internet..."):
+            with st.spinner(f"A varrer a internet..."):
                 arrobas, prox_pag = garimpar_perfis_google(nicho_alvo, hashtag_alvo, local_alvo, qtd_busca, st.session_state["api_key_serper"], 1)
                 st.session_state["proxima_pagina"] = prox_pag
                 
             if arrobas:
                 processar_lista_arrobas(arrobas)
             else:
-                st.warning("Não foram encontrados novos perfis (todos os encontrados já estavam na sua Blacklist). Tente novos termos!")
+                st.warning("Não foram encontrados novos perfis (ou os encontrados já constavam na sua Blacklist). Tente novos termos!")
 
     if st.session_state["ultima_busca_nicho"] or st.session_state["ultima_busca_hashtag"]:
         texto_busca = f"*{st.session_state['ultima_busca_nicho']}*" if st.session_state['ultima_busca_nicho'] else ""
@@ -486,7 +488,7 @@ with aba_garimpo:
         st.markdown(f"**Continuar o garimpo:** {texto_busca}")
         
         if st.button("➕ Pesquisar Mais 10 Novos Leads", type="secondary", use_container_width=True):
-            with st.spinner(f"Folheando o Google (Página {st.session_state['proxima_pagina']})..."):
+            with st.spinner(f"A folhear o Google (Página {st.session_state['proxima_pagina']})..."):
                 arrobas, prox_pag = garimpar_perfis_google(
                     st.session_state["ultima_busca_nicho"], 
                     st.session_state["ultima_busca_hashtag"],
@@ -497,7 +499,7 @@ with aba_garimpo:
             if arrobas:
                 processar_lista_arrobas(arrobas)
             else:
-                st.warning("Fim dos resultados ou só vieram repetidos. Tente novos termos!")
+                st.warning("Fim dos resultados ou apenas perfis repetidos. Tente novos termos!")
 
     renderizar_resultados_garimpo("garimpo")
 
@@ -512,7 +514,7 @@ with aba_busca:
     renderizar_resultados_garimpo("busca_manual")
 
 with aba_historico:
-    st.subheader("📚 Seus Leads Qualificados")
+    st.subheader("📚 Os seus Leads Qualificados")
     if not st.session_state["historico_leads"]:
         st.info("Nenhum lead qualificado ainda.")
     else:
