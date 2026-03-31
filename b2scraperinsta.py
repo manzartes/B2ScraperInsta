@@ -31,6 +31,10 @@ if "ultima_busca_hashtag" not in st.session_state:
     st.session_state["ultima_busca_hashtag"] = ""
 if "ultima_busca_local" not in st.session_state:
     st.session_state["ultima_busca_local"] = ""
+if "ultima_busca_negativos" not in st.session_state:
+    st.session_state["ultima_busca_negativos"] = ""
+if "ultima_busca_frase" not in st.session_state:
+    st.session_state["ultima_busca_frase"] = ""
 if "proxima_pagina" not in st.session_state:
     st.session_state["proxima_pagina"] = 1
 
@@ -42,12 +46,50 @@ if "leads_reprovados_tela" not in st.session_state:
 if "blacklist_arrobas" not in st.session_state:
     st.session_state["blacklist_arrobas"] = set()
 
+# Arrays que agora serão preenchidos pela Planilha
 if "bons_exemplos" not in st.session_state:
     st.session_state["bons_exemplos"] = []
 if "maus_exemplos" not in st.session_state:
     st.session_state["maus_exemplos"] = []
 if "feedbacks_dados" not in st.session_state:
     st.session_state["feedbacks_dados"] = [] 
+
+# --- FUNÇÕES DE MEMÓRIA PERMANENTE (PLANILHA) ---
+def puxar_memoria_ia():
+    webhook = st.session_state.get("url_webhook", URL_WEBHOOK_PLANILHA)
+    if not webhook: return {"bons": [], "maus": []}
+    try:
+        res = requests.get(f"{webhook}?acao=memoria")
+        if res.ok:
+            return res.json()
+    except Exception:
+        pass
+    return {"bons": [], "maus": []}
+
+def salvar_feedback_planilha(arroba, feedback_tipo, bio):
+    webhook = st.session_state.get("url_webhook", URL_WEBHOOK_PLANILHA)
+    if not webhook: return
+    dados = {
+        "tipo": "feedback",
+        "sheet_name": "MemoriaIA",
+        "arroba": arroba,
+        "feedback": feedback_tipo,
+        "bio": bio
+    }
+    try:
+        requests.post(webhook, json=dados)
+    except:
+        pass
+
+# Sincroniza a memória no início da sessão
+if "memoria_carregada" not in st.session_state:
+    if URL_WEBHOOK_PLANILHA:
+        with st.spinner("A carregar o cérebro da IA da Nuvem..."):
+            memoria_nuvem = puxar_memoria_ia()
+            st.session_state["bons_exemplos"] = memoria_nuvem.get("bons", [])
+            st.session_state["maus_exemplos"] = memoria_nuvem.get("maus", [])
+    st.session_state["memoria_carregada"] = True
+
 
 # --- Layout do Cabeçalho ---
 col_titulo, col_botoes = st.columns([3, 1])
@@ -107,7 +149,7 @@ with st.sidebar:
         anos_exp = st.text_input("Anos de Experiência:", value="5")
         
     st.divider()
-    st.caption(f"🧠 IA treinada com: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
+    st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
 
 # --- ENVIAR PARA GOOGLE SHEETS ---
 def enviar_lead_para_planilha(lead_dados):
@@ -144,25 +186,33 @@ def puxar_blacklist_automatica():
         pass
     return set()
 
-# --- MOTOR DE GARIMPO (COM EXCLUSÃO DE POSTS E REELS) ---
-def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pagina_inicial=1):
+# --- MOTOR DE GARIMPO (COM FILTROS AVANÇADOS) ---
+def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, frase_exata, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     
-    # HACK AVANÇADO: Proibir o Google de trazer fotos e reels, forçando a procura apenas em perfis
+    # HACK AVANÇADO: Proibir fotos e reels
     query = 'site:instagram.com -inurl:p -inurl:reel -inurl:explore -inurl:tags'
     
     if profissao:
         query += f' "{profissao}"'
     if hashtag:
         hash_term = hashtag if hashtag.startswith("#") else f"#{hashtag}"
-        query += f' "{hash_term}"'
+        query += f' {hash_term}'
     if localizacao:
         query += f' "{localizacao}"'
+        
+    # Aplicando Filtros Avançados
+    if frase_exata:
+        query += f' intext:"{frase_exata}"'
+    if termos_negativos:
+        lista_negativos = [t.strip() for t in termos_negativos.split(",") if t.strip()]
+        for negativo in lista_negativos:
+            query += f' -{negativo}'
     
     arrobas_encontrados = []
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     
-    barra_busca = st.progress(0, text="A sincronizar a Blacklist com a Planilha...")
+    barra_busca = st.progress(0, text="Sincronizando Blacklist com a Planilha...")
     blacklist_da_nuvem = puxar_blacklist_automatica()
     blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual).union(blacklist_da_nuvem)
     
@@ -175,7 +225,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
             break
             
         progresso = min((pagina - pagina_inicial) / paginas_necessarias, 1.0)
-        barra_busca.progress(progresso, text=f"A ler a página {pagina} do Google...")
+        barra_busca.progress(progresso, text=f"Lendo página {pagina} do Google...")
         
         payload = json.dumps({"q": query, "page": pagina, "num": 10}) 
         headers = {'X-API-KEY': api_serper, 'Content-Type': 'application/json'}
@@ -232,11 +282,11 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         
         treinamento_extra = ""
         if st.session_state["bons_exemplos"]:
-            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador GOSTOU destes perfis recentemente. APROVE parecidos:\n- {bons}"
+            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:]) # Puxa até 3 para não explodir o limite do Google
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador GOSTOU destes perfis no passado. APROVE parecidos:\n- {bons}"
         if st.session_state["maus_exemplos"]:
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
-            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis recentemente. REPROVE parecidos:\n- {maus}"
+            treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis no passado. REPROVE parecidos:\n- {maus}"
         
         prompt = f"""
         Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -344,7 +394,7 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                     dados_bl = chumbo.copy()
                     dados_bl["link_ig"] = link_ig
                     dados_bl["sheet_name"] = st.session_state["aba_blacklist"]
-                    dados_bl["status"] = "Foi para o CRM"
+                    dados_bl["status"] = "Foi pro CRM"
                     
                     if enviar_lead_para_planilha(dados_crm):
                         if st.session_state["nome_aba"] != st.session_state["aba_blacklist"]:
@@ -385,14 +435,18 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                 if st.button("👍 Sim, buscar parecidos", key=f"up_{chumbo['arroba']}_{contexto}"):
                     st.session_state["bons_exemplos"].append(chumbo.get('bio', ''))
                     st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    # Envia para a planilha salvar na memória eterna!
+                    salvar_feedback_planilha(chumbo['arroba'], "Like", chumbo.get('bio', ''))
                     st.rerun()
             with col_fb2:
                 if st.button("👎 Não, perfil ruim", key=f"down_{chumbo['arroba']}_{contexto}"):
                     st.session_state["maus_exemplos"].append(chumbo.get('bio', ''))
                     st.session_state["feedbacks_dados"].append(chumbo['arroba'])
+                    # Envia para a planilha salvar na memória eterna!
+                    salvar_feedback_planilha(chumbo['arroba'], "Dislike", chumbo.get('bio', ''))
                     st.rerun()
         else:
-            st.success("✅ Feedback registado!")
+            st.success("✅ Feedback guardado no cérebro da IA!")
 
 # ==========================================
 # 🚀 FUNÇÃO DE PROCESSAMENTO BLINDADA
@@ -457,6 +511,14 @@ with aba_garimpo:
         local_alvo = st.text_input("Localização (Opcional):", placeholder="Ex: São Paulo")
     with col4:
         qtd_busca = st.number_input("Qtd:", min_value=5, max_value=50, value=15, step=5)
+
+    # 🛠️ FILTROS AVANÇADOS (Novo Módulo)
+    with st.expander("🛠️ Filtros Avançados de Busca (Opcional)", expanded=False):
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            termos_negativos = st.text_input("Palavras para EXCLUIR (separadas por vírgula):", placeholder="Ex: estudante, curso, fanpage")
+        with col_f2:
+            frase_exata = st.text_input("Frase EXATA na Bio do Instagram:", placeholder='Ex: Agende sua consulta')
         
     if st.button("🔍 Iniciar Nova Busca", type="primary", use_container_width=True):
         if not st.session_state["api_key_serper"] or not st.session_state["api_key_gemini"]:
@@ -467,10 +529,15 @@ with aba_garimpo:
             st.session_state["ultima_busca_nicho"] = nicho_alvo
             st.session_state["ultima_busca_hashtag"] = hashtag_alvo
             st.session_state["ultima_busca_local"] = local_alvo
+            st.session_state["ultima_busca_negativos"] = termos_negativos
+            st.session_state["ultima_busca_frase"] = frase_exata
             st.session_state["proxima_pagina"] = 1
             
             with st.spinner(f"A varrer a internet..."):
-                arrobas, prox_pag = garimpar_perfis_google(nicho_alvo, hashtag_alvo, local_alvo, qtd_busca, st.session_state["api_key_serper"], 1)
+                arrobas, prox_pag = garimpar_perfis_google(
+                    nicho_alvo, hashtag_alvo, local_alvo, termos_negativos, frase_exata,
+                    qtd_busca, st.session_state["api_key_serper"], 1
+                )
                 st.session_state["proxima_pagina"] = prox_pag
                 
             if arrobas:
@@ -493,6 +560,8 @@ with aba_garimpo:
                     st.session_state["ultima_busca_nicho"], 
                     st.session_state["ultima_busca_hashtag"],
                     st.session_state["ultima_busca_local"], 
+                    st.session_state["ultima_busca_negativos"],
+                    st.session_state["ultima_busca_frase"],
                     10, st.session_state["api_key_serper"], st.session_state["proxima_pagina"]
                 )
                 st.session_state["proxima_pagina"] = prox_pag
