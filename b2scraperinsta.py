@@ -264,7 +264,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (ENXUTO - APENAS 1º CONTACTO) ---
+# --- CÉREBRO DA IA (ENXUTO E COM PERSONA CORRIGIDA) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
@@ -282,14 +282,14 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         
         treinamento_extra = ""
         if st.session_state["bons_exemplos"]:
-            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:]) # Puxa até 3 para não explodir o limite do Google
+            bons = "\n- ".join(st.session_state["bons_exemplos"][-3:]) 
             treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador GOSTOU destes perfis no passado. APROVE parecidos:\n- {bons}"
         if st.session_state["maus_exemplos"]:
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
             treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis no passado. REPROVE parecidos:\n- {maus}"
         
         prompt = f"""
-        Você atua como o Renê, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
+        Você atua como {nome_bdr}, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
         
         O seu ICP EXATO é: Dono de pequena/média empresa, Profissional liberal, Consultor/mentor, Médico/odontólogo, Advogado, Corretor/assessor, Gestor/comercial, Executivo, Engenheiro/arquiteto.
 
@@ -305,7 +305,10 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
 
         Sua tarefa: Descubra o Nome e a Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere APENAS O SCRIPT INICIAL de abordagem.
         
-        🚨 REGRA DE FORMATAÇÃO EXTREMA: Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. No JSON, use "\\n\\n" para representar essas quebras de linha.
+        🚨 REGRAS EXTREMAS: 
+        1. Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. No JSON, use "\\n\\n" para representar essas quebras de linha.
+        2. Substitua APENAS os campos [NOME], [ÁREA X] e [ESPECIALIDADE]. 
+        3. É expressamente PROIBIDO alterar o nome "{nome_bdr}" ou os anos de experiência "{exp_bdr}". Mantenha exatamente como eu escrevi no modelo.
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
         Olá, [NOME]. Tudo bem?
@@ -435,14 +438,12 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                 if st.button("👍 Sim, buscar parecidos", key=f"up_{chumbo['arroba']}_{contexto}"):
                     st.session_state["bons_exemplos"].append(chumbo.get('bio', ''))
                     st.session_state["feedbacks_dados"].append(chumbo['arroba'])
-                    # Envia para a planilha salvar na memória eterna!
                     salvar_feedback_planilha(chumbo['arroba'], "Like", chumbo.get('bio', ''))
                     st.rerun()
             with col_fb2:
                 if st.button("👎 Não, perfil ruim", key=f"down_{chumbo['arroba']}_{contexto}"):
                     st.session_state["maus_exemplos"].append(chumbo.get('bio', ''))
                     st.session_state["feedbacks_dados"].append(chumbo['arroba'])
-                    # Envia para a planilha salvar na memória eterna!
                     salvar_feedback_planilha(chumbo['arroba'], "Dislike", chumbo.get('bio', ''))
                     st.rerun()
         else:
