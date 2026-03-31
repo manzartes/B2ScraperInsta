@@ -144,7 +144,7 @@ def puxar_blacklist_automatica():
         pass
     return set()
 
-# --- MOTOR DE GARIMPO (COM HASHTAG E BLACKLIST ABSOLUTA) ---
+# --- MOTOR DE GARIMPO (HASHTAG LIVRE + BLACKLIST) ---
 def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pagina_inicial=1):
     url = "https://google.serper.dev/search"
     
@@ -153,9 +153,9 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
     if profissao:
         query += f' "{profissao}"'
     if hashtag:
-        # Garante que a hashtag tem o # mesmo se o usuário não digitar
+        # Removi as aspas duplas da hashtag para o Google buscar livremente nas páginas
         hash_term = hashtag if hashtag.startswith("#") else f"#{hashtag}"
-        query += f' "{hash_term}"'
+        query += f' {hash_term}'
     if localizacao:
         query += f' "{localizacao}"'
     
@@ -197,7 +197,6 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
                 match = re.search(r'instagram\.com/([^/?]+)', link)
                 if match:
                     username = match.group(1).strip()
-                    # Ignora links soltos que não são perfis
                     if username.lower() not in palavras_ignoradas:
                         arroba_formatado = f"@{username}"
                         
@@ -215,7 +214,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, qtd, api_serper, pag
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA ---
+# --- CÉREBRO DA IA (ENXUTO - APENAS 1º CONTATO) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
     try:
         genai.configure(api_key=api_gemini)
@@ -254,7 +253,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
 
         Resumo do Google para a conta {arroba}: "{snippet_google}"
 
-        Sua tarefa: Descubra Nome, Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere 3 SCRIPTS.
+        Sua tarefa: Descubra Nome, Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere O SCRIPT INICIAL de abordagem.
         
         🚨 REGRA DE FORMATAÇÃO EXTREMA: Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. Isso é fundamental para a escaneabilidade do lead. No JSON, use "\\n\\n" para representar essas quebras de linha entre os parágrafos.
 
@@ -282,29 +281,8 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         
         Posso compartilhar essas observações?
 
-        [SCRIPT DE 2 DIAS]
-        Boa tarde, [NOME].
-        tudo bem?
-        Espero que sim.
-        
-        Chegou a ver minha mensagem?
-        O que me diz? 🙂
-
-        [SCRIPT DE 4 DIAS]
-        Boa tarde, [NOME].
-        Tudo certo por aí?
-        Espero que sim.
-        
-        Estou retomando o contato contigo pois pelo pouco que acompanhei seu Instagram, ficou muito claro para mim que você é uma pessoa extremamente empenhada no que busca fazer e muito comprometida com o seu negócio, sua autoridade e imagem pessoal.
-        
-        Tenho diversas pessoas com um perfil semelhante ao seu, tendo grandes transformações com o meu método para ser percebido como autoridade e atrair clientes qualificados.
-        
-        Por todos esses motivos, acredito que o projeto possa ser muito agregador para ti, porém vem sendo um tanto quanto difícil de nos comunicarmos, então eu gostaria de saber se você tem algum interesse em entender melhor ou se realmente posso seguir adiante e falar com novas pessoas.
-        
-        Abraços.
-
         Retorne APENAS um objeto JSON válido (sem markdown):
-        "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio", "script_2": "texto ou vazio", "script_3": "texto ou vazio"
+        "status": "APROVADO" ou "REPROVADO", "motivo": "justificativa curta", "script_1": "texto ou vazio"
         """
         
         resposta = modelo.generate_content(prompt)
@@ -328,7 +306,7 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar."
 
 # ==========================================
-# 🎨 DESIGN DA CAIXA DO LEAD
+# 🎨 DESIGN DA CAIXA DO LEAD (UI LIMPA)
 # ==========================================
 def desenhar_card_lead(chumbo, contexto="geral"):
     with st.expander(f"🔥 {chumbo['arroba']} - ICP Aprovado", expanded=False):
@@ -394,15 +372,8 @@ def desenhar_card_lead(chumbo, contexto="geral"):
                 st.warning("🚫 Na Blacklist!")
             
         st.divider()
-        st.markdown("**1️⃣ Mensagem Inicial (Diagnóstico)**")
+        st.markdown("**Mensagem de Abordagem**")
         st.code(chumbo.get('script_1', ''), language="markdown")
-        
-        st.markdown("**2️⃣ Cobrança (2 Dias)**")
-        st.code(chumbo.get('script_2', ''), language="markdown")
-        
-        st.markdown("**3️⃣ Xeque-Mate (4 Dias)**")
-        st.code(chumbo.get('script_3', ''), language="markdown")
-        
         st.divider()
         
         st.markdown("**A IA acertou neste perfil? (Ajude-a a aprender)**")
@@ -441,7 +412,6 @@ def processar_lista_arrobas(lista_de_arrobas):
             if avaliacao.get("status") == "APROVADO":
                 lead_aprovado = {
                     "arroba": arroba, "bio": bio, "script_1": avaliacao.get("script_1"), 
-                    "script_2": avaliacao.get("script_2"), "script_3": avaliacao.get("script_3"), 
                     "motivo": avaliacao.get("motivo")
                 }
                 st.session_state["leads_aprovados_tela"].append(lead_aprovado)
