@@ -15,12 +15,12 @@ try:
     CHAVE_SERPER_PADRAO = st.secrets.get("CHAVE_SERPER", "")
     CHAVE_GEMINI_PADRAO = st.secrets.get("CHAVE_GEMINI", "")
     URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
-    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "MARÇO/26")
+    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "ABRIL/26")
 except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
     URL_WEBHOOK_PLANILHA = ""
-    NOME_ABA_PADRAO = "MARÇO/26"
+    NOME_ABA_PADRAO = "ABRIL/26"
 
 # --- INICIALIZANDO MEMÓRIAS BLINDADAS ---
 if "historico_leads" not in st.session_state:
