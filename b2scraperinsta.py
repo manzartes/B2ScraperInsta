@@ -6,7 +6,7 @@ import time
 import re
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="B2Scaper Insta", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="B2Scraper Insta", page_icon="⚡", layout="wide")
 
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
@@ -15,12 +15,10 @@ try:
     CHAVE_SERPER_PADRAO = st.secrets.get("CHAVE_SERPER", "")
     CHAVE_GEMINI_PADRAO = st.secrets.get("CHAVE_GEMINI", "")
     URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
-    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "ABRIL/26")
 except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
     URL_WEBHOOK_PLANILHA = ""
-    NOME_ABA_PADRAO = "ABRIL/26"
 
 # --- INICIALIZANDO MEMÓRIAS BLINDADAS ---
 if "historico_leads" not in st.session_state:
@@ -100,7 +98,7 @@ with col_botoes:
     st.write("") 
     st.write("")
     st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1Ru4E7ArF3UKiPhkqjy0OkrCkdSKzcjHHchQm5v-836g/edit?gid=1121870777#gid=1121870777", use_container_width=True)
-    st.link_button("💼 B2ScraperLinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
+    st.link_button("💼 B2Scraper LinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
 
 # ==========================================
 # ⚙️ MENU LATERAL ORGANIZADO (GAVETAS)
@@ -112,7 +110,7 @@ with st.sidebar:
         if "url_webhook" not in st.session_state:
             st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
         if "nome_aba" not in st.session_state:
-            st.session_state["nome_aba"] = NOME_ABA_PADRAO
+            st.session_state["nome_aba"] = "ABRIL/26"
             
         url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
         nome_aba = st.text_input("Aba de Entrada (CRM):", value=st.session_state["nome_aba"], help="Para onde vão os leads aprovados.")
@@ -147,7 +145,7 @@ with st.sidebar:
     with st.expander("👤 Seu Perfil e Abordagem", expanded=False):
         seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
         anos_exp = st.text_input("Anos de Experiência:", value="5")
-        pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr., Dra., Prof.")
+        pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr., Prof., Sr.")
         
         st.session_state["pronome_lead"] = pronome_lead
         
@@ -267,7 +265,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
     barra_busca.empty()
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (ENXUTO E COM PERSONA CORRIGIDA) ---
+# --- CÉREBRO DA IA (COM ADAPTAÇÃO DINÂMICA DE GÊNERO/PRONOME) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr, pronome_lead):
     try:
         genai.configure(api_key=api_gemini)
@@ -291,9 +289,6 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
             treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis no passado. REPROVE parecidos:\n- {maus}"
             
-        # Ajusta dinamicamente o prefixo do nome (ex: "Dr. ") garantindo que o espaçamento fique perfeito
-        prefixo_nome = f"{pronome_lead.strip()} " if pronome_lead and pronome_lead.strip() else ""
-        
         prompt = f"""
         Você atua como {nome_bdr}, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
         
@@ -311,13 +306,14 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
 
         Sua tarefa: Descubra o Nome e a Área/Especialidade. Avalie se é ICP (APROVADO ou REPROVADO). Se APROVADO, gere APENAS O SCRIPT INICIAL de abordagem.
         
-        🚨 REGRAS EXTREMAS: 
+        🚨 REGRAS EXTREMAS PARA A CRIAÇÃO DO SCRIPT: 
         1. Mantenha as QUEBRAS DE LINHA (parágrafos) EXATAMENTE como nos modelos abaixo. No JSON, use "\\n\\n" para representar essas quebras de linha.
-        2. Substitua APENAS os campos [NOME], [ÁREA X] e [ESPECIALIDADE]. 
-        3. É expressamente PROIBIDO alterar o nome "{nome_bdr}" ou os anos de experiência "{exp_bdr}". Mantenha exatamente como eu escrevi no modelo.
+        2. Substitua os campos [PRONOME_E_NOME], [ÁREA X] e [ESPECIALIDADE]. 
+        3. 🎯 REGRA PARA A TAG [PRONOME_E_NOME]: O pronome base sugerido é "{pronome_lead}". Você DEVE analisar o gênero do lead (pelo nome ou bio) e flexionar esse pronome (ex: Se o base for "Dr." e for mulher, use "Dra.". Se for "Prof.", use "Profa."). Junte o pronome flexionado com o primeiro nome do lead (ex: "Dra. Maria"). Se o pronome base estiver em branco, escreva APENAS o primeiro nome (ex: "Maria").
+        4. É expressamente PROIBIDO alterar o nome "{nome_bdr}" ou os anos de experiência "{exp_bdr}".
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
-        Olá, {prefixo_nome}[NOME]. Tudo bem?
+        Olá, [PRONOME_E_NOME]. Tudo bem?
         Espero que sim.
         
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
@@ -329,7 +325,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         Posso compartilhar essas observações?
 
         [SCRIPT INICIAL 2 - SEM ESPECIALIDADE]
-        Olá, {prefixo_nome}[NOME]. Tudo bem?
+        Olá, [PRONOME_E_NOME]. Tudo bem?
         Espero que sim.
         
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
