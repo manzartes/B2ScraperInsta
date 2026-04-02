@@ -6,7 +6,7 @@ import time
 import re
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="B2SCraper Insta", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="Máquina de Qualificação em Massa", page_icon="⚡", layout="wide")
 
 # ==========================================
 # 🔑 PUXANDO CHAVES COM SEGURANÇA (SECRETS)
@@ -15,12 +15,12 @@ try:
     CHAVE_SERPER_PADRAO = st.secrets.get("CHAVE_SERPER", "")
     CHAVE_GEMINI_PADRAO = st.secrets.get("CHAVE_GEMINI", "")
     URL_WEBHOOK_PLANILHA = st.secrets.get("WEBHOOK_PLANILHA", "")
-    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "ABRIL/26")
+    NOME_ABA_PADRAO = st.secrets.get("NOME_ABA", "Página1")
 except Exception:
     CHAVE_SERPER_PADRAO = ""
     CHAVE_GEMINI_PADRAO = ""
     URL_WEBHOOK_PLANILHA = ""
-    NOME_ABA_PADRAO = "ABRIL/26"
+    NOME_ABA_PADRAO = "Página1"
 
 # --- INICIALIZANDO MEMÓRIAS BLINDADAS ---
 if "historico_leads" not in st.session_state:
@@ -94,7 +94,7 @@ if "memoria_carregada" not in st.session_state:
 # --- Layout do Cabeçalho ---
 col_titulo, col_botoes = st.columns([3, 1])
 with col_titulo:
-    st.title("⚡ B2Scraper Insta")
+    st.title("⚡ Máquina de Garimpo e Qualificação")
     st.markdown("Encontre perfis, qualifique com IA e mande para a aba certa do CRM com 1 clique.")
 with col_botoes:
     st.write("") 
@@ -123,7 +123,7 @@ with st.sidebar:
     with st.expander("🚫 Gerenciar Blacklist", expanded=False):
         st.markdown("<small>Aba da planilha exclusiva para a Lista Negra.</small>", unsafe_allow_html=True)
         if "aba_blacklist" not in st.session_state:
-            st.session_state["aba_blacklist"] = "BLACKLIST"
+            st.session_state["aba_blacklist"] = "Blacklist"
             
         aba_blacklist = st.text_input("Aba da Blacklist:", value=st.session_state["aba_blacklist"], help="Tem que existir na planilha do Sheets.")
         st.session_state["aba_blacklist"] = aba_blacklist
@@ -144,9 +144,12 @@ with st.sidebar:
         st.session_state["api_key_serper"] = api_key_serper
         st.session_state["api_key_gemini"] = api_key_gemini
 
-    with st.expander("👤 Seu Perfil (BDR)", expanded=False):
+    with st.expander("👤 Seu Perfil e Abordagem", expanded=False):
         seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
         anos_exp = st.text_input("Anos de Experiência:", value="5")
+        pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr., Dra., Prof.")
+        
+        st.session_state["pronome_lead"] = pronome_lead
         
     st.divider()
     st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
@@ -265,7 +268,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
 # --- CÉREBRO DA IA (ENXUTO E COM PERSONA CORRIGIDA) ---
-def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr):
+def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr, pronome_lead):
     try:
         genai.configure(api_key=api_gemini)
         modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
@@ -287,6 +290,9 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         if st.session_state["maus_exemplos"]:
             maus = "\n- ".join(st.session_state["maus_exemplos"][-3:])
             treinamento_extra += f"\n\n🚨 ATENÇÃO! O utilizador REPROVOU estes perfis no passado. REPROVE parecidos:\n- {maus}"
+            
+        # Ajusta dinamicamente o prefixo do nome (ex: "Dr. ") garantindo que o espaçamento fique perfeito
+        prefixo_nome = f"{pronome_lead.strip()} " if pronome_lead and pronome_lead.strip() else ""
         
         prompt = f"""
         Você atua como {nome_bdr}, um BDR de High-Ticket especialista em qualificação de leads. A empresa vende a mentoria "Código do Valor".
@@ -311,7 +317,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         3. É expressamente PROIBIDO alterar o nome "{nome_bdr}" ou os anos de experiência "{exp_bdr}". Mantenha exatamente como eu escrevi no modelo.
 
         [SCRIPT INICIAL 1 - COM ESPECIALIDADE]
-        Olá, [NOME]. Tudo bem?
+        Olá, {prefixo_nome}[NOME]. Tudo bem?
         Espero que sim.
         
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
@@ -323,7 +329,7 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
         Posso compartilhar essas observações?
 
         [SCRIPT INICIAL 2 - SEM ESPECIALIDADE]
-        Olá, [NOME]. Tudo bem?
+        Olá, {prefixo_nome}[NOME]. Tudo bem?
         Espero que sim.
         
         Aqui é o {nome_bdr}, muito prazer. Eu trabalho há mais de {exp_bdr} anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
@@ -456,6 +462,8 @@ def processar_lista_arrobas(lista_de_arrobas):
     st.session_state["leads_aprovados_tela"] = []
     st.session_state["leads_reprovados_tela"] = []
     
+    pronome = st.session_state.get("pronome_lead", "")
+    
     barra = st.progress(0)
     for i, arroba in enumerate(lista_de_arrobas):
         barra.progress((i + 1) / len(lista_de_arrobas), text=f"A analisar {arroba} na IA...")
@@ -464,7 +472,7 @@ def processar_lista_arrobas(lista_de_arrobas):
         
         bio = buscar_bio_no_google(arroba, st.session_state["api_key_serper"])
         if bio and "Erro" not in bio and "Nenhuma" not in bio:
-            avaliacao = analisar_e_gerar_script(arroba, bio, st.session_state["api_key_gemini"], seu_nome, anos_exp)
+            avaliacao = analisar_e_gerar_script(arroba, bio, st.session_state["api_key_gemini"], seu_nome, anos_exp, pronome)
             
             if avaliacao.get("status") == "APROVADO":
                 lead_aprovado = {
