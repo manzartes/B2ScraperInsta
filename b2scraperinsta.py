@@ -99,6 +99,7 @@ with col_botoes:
     st.write("")
     st.link_button("📊 Planilha de Controle", "https://docs.google.com/spreadsheets/d/1Ru4E7ArF3UKiPhkqjy0OkrCkdSKzcjHHchQm5v-836g/edit?gid=1121870777#gid=1121870777", use_container_width=True)
     st.link_button("💼 B2Scraper LinkedIn", "https://b2scraper.streamlit.app/", use_container_width=True)
+    st.link_button("🕸️ B2Scraper Web", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
 # ==========================================
 # ⚙️ MENU LATERAL ORGANIZADO (GAVETAS)
