@@ -364,6 +364,74 @@ def buscar_bio_no_google(arroba, api_serper):
         return "Erro ao buscar."
 
 # ==========================================
+# 🚀 BOTÃO MÁGICO: COPIA SCRIPT + ABRE DM
+# ==========================================
+def botao_copiar_e_abrir_dm(username, script):
+    """
+    Renderiza um botão HTML custom que:
+    1. Copia o script pro clipboard
+    2. Abre a DM direto no Instagram (via ig.me/m/username)
+    """
+    # Escapa o script pra segurança no JS (aspas, quebras de linha, etc)
+    script_safe = json.dumps(script if script else "")
+    
+    html_botao = f"""
+    <div style="width:100%;">
+        <button id="btn_dm_{username}" onclick="copiarEAbrir_{username}()" 
+            style="
+                width: 100%;
+                background-color: #FF4B4B;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 12px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                font-family: 'Source Sans Pro', sans-serif;
+                height: 38px;
+                transition: all 0.2s;
+            "
+            onmouseover="this.style.backgroundColor='#E03C3C'"
+            onmouseout="this.style.backgroundColor='#FF4B4B'"
+        >
+            📋 Copiar + Abrir DM
+        </button>
+    </div>
+    
+    <script>
+    function copiarEAbrir_{username}() {{
+        const script = {script_safe};
+        const btn = document.getElementById('btn_dm_{username}');
+        
+        // Copia pro clipboard
+        navigator.clipboard.writeText(script).then(function() {{
+            // Feedback visual
+            btn.innerHTML = '✅ Copiado! Abrindo DM...';
+            btn.style.backgroundColor = '#28a745';
+            
+            // Abre a DM direto (deep link do Meta)
+            setTimeout(function() {{
+                window.open('https://ig.me/m/{username}', '_blank');
+                
+                // Volta o botão ao normal depois de 2s
+                setTimeout(function() {{
+                    btn.innerHTML = '📋 Copiar + Abrir DM';
+                    btn.style.backgroundColor = '#FF4B4B';
+                }}, 2000);
+            }}, 300);
+        }}).catch(function(err) {{
+            // Fallback se o clipboard falhar
+            btn.innerHTML = '⚠️ Erro ao copiar';
+            btn.style.backgroundColor = '#ffc107';
+            window.open('https://ig.me/m/{username}', '_blank');
+        }});
+    }}
+    </script>
+    """
+    components.html(html_botao, height=50)
+
+# ==========================================
 # 🎨 DESIGN DA CAIXA DO LEAD
 # ==========================================
 def desenhar_card_lead(chumbo, contexto="geral"):
@@ -379,7 +447,8 @@ def desenhar_card_lead(chumbo, contexto="geral"):
         with col2:
             st.code(username_limpo, language=None)
         with col3:
-            st.link_button("👉 Abrir Insta", link_ig, use_container_width=True, type="primary")
+            # 🚀 BOTÃO NOVO: Copia script + abre DM direto
+            botao_copiar_e_abrir_dm(username_limpo, chumbo.get('script_1', ''))
         
         estado_crm_key = f"estado_crm_{chumbo['arroba']}_{contexto}"
         estado_bl_key = f"estado_bl_{chumbo['arroba']}_{contexto}"
