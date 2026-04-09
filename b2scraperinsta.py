@@ -368,20 +368,30 @@ def buscar_bio_no_google(arroba, api_serper):
 # ==========================================
 def botao_copiar_e_abrir_dm(username, script):
     """
-    Renderiza um botão HTML custom que:
-    1. Copia o script pro clipboard
-    2. Abre a DM direto no Instagram (via ig.me/m/username)
+    Renderiza um link <a> custom que:
+    1. Copia o script pro clipboard (via execCommand, funciona em iframe)
+    2. Abre a DM direto no Instagram (via ig.me/m/username) — como link <a target="_blank"> não é bloqueado como popup
     """
-    # Escapa o script pra segurança no JS (aspas, quebras de linha, etc)
+    # ID único pra evitar colisão (usernames podem ter caracteres estranhos)
+    uid = re.sub(r'[^a-zA-Z0-9]', '', username)
+    
+    # Escapa o script pra segurança no JS
     script_safe = json.dumps(script if script else "")
     
     html_botao = f"""
     <div style="width:100%;">
-        <button id="btn_dm_{username}" onclick="copiarEAbrir_{username}()" 
+        <a id="btn_dm_{uid}" 
+           href="https://ig.me/m/{username}" 
+           target="_blank" 
+           rel="noopener noreferrer"
+           onclick="copiarScript_{uid}(event)"
             style="
+                display: flex;
+                align-items: center;
+                justify-content: center;
                 width: 100%;
                 background-color: #FF4B4B;
-                color: white;
+                color: white !important;
                 border: none;
                 border-radius: 8px;
                 padding: 8px 12px;
@@ -390,46 +400,63 @@ def botao_copiar_e_abrir_dm(username, script):
                 cursor: pointer;
                 font-family: 'Source Sans Pro', sans-serif;
                 height: 38px;
+                text-decoration: none !important;
+                box-sizing: border-box;
                 transition: all 0.2s;
             "
             onmouseover="this.style.backgroundColor='#E03C3C'"
             onmouseout="this.style.backgroundColor='#FF4B4B'"
         >
             📋 Copiar + Abrir DM
-        </button>
+        </a>
+        <textarea id="ta_{uid}" style="position:absolute; left:-9999px; top:-9999px;">{script if script else ""}</textarea>
     </div>
     
     <script>
-    function copiarEAbrir_{username}() {{
-        const script = {script_safe};
-        const btn = document.getElementById('btn_dm_{username}');
+    function copiarScript_{uid}(event) {{
+        const btn = document.getElementById('btn_dm_{uid}');
+        const ta = document.getElementById('ta_{uid}');
         
-        // Copia pro clipboard
-        navigator.clipboard.writeText(script).then(function() {{
-            // Feedback visual
-            btn.innerHTML = '✅ Copiado! Abrindo DM...';
-            btn.style.backgroundColor = '#28a745';
+        try {{
+            // Método 1: textarea + execCommand (funciona dentro de iframe)
+            ta.style.left = '0';
+            ta.style.top = '0';
+            ta.focus();
+            ta.select();
+            ta.setSelectionRange(0, 99999);
+            const sucesso = document.execCommand('copy');
+            ta.style.left = '-9999px';
+            ta.style.top = '-9999px';
             
-            // Abre a DM direto (deep link do Meta)
-            setTimeout(function() {{
-                window.open('https://ig.me/m/{username}', '_blank');
-                
-                // Volta o botão ao normal depois de 2s
-                setTimeout(function() {{
-                    btn.innerHTML = '📋 Copiar + Abrir DM';
-                    btn.style.backgroundColor = '#FF4B4B';
-                }}, 2000);
-            }}, 300);
-        }}).catch(function(err) {{
-            // Fallback se o clipboard falhar
-            btn.innerHTML = '⚠️ Erro ao copiar';
+            // Tenta também o clipboard moderno como bônus
+            if (navigator.clipboard) {{
+                navigator.clipboard.writeText({script_safe}).catch(function() {{}});
+            }}
+            
+            if (sucesso) {{
+                btn.innerHTML = '✅ Copiado! Abrindo DM...';
+                btn.style.backgroundColor = '#28a745';
+            }} else {{
+                btn.innerHTML = '⚠️ Abrindo DM (copie manual)';
+                btn.style.backgroundColor = '#ffc107';
+            }}
+        }} catch (err) {{
+            btn.innerHTML = '⚠️ Abrindo DM (copie manual)';
             btn.style.backgroundColor = '#ffc107';
-            window.open('https://ig.me/m/{username}', '_blank');
-        }});
+        }}
+        
+        // Volta o botão ao normal depois de 2.5s
+        setTimeout(function() {{
+            btn.innerHTML = '📋 Copiar + Abrir DM';
+            btn.style.backgroundColor = '#FF4B4B';
+        }}, 2500);
+        
+        // NÃO chama event.preventDefault() — deixa o link <a> abrir naturalmente
+        return true;
     }}
     </script>
     """
-    components.html(html_botao, height=50)
+    components.html(html_botao, height=55)
 
 # ==========================================
 # 🎨 DESIGN DA CAIXA DO LEAD
