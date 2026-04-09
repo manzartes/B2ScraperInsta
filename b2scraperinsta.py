@@ -368,14 +368,12 @@ def buscar_bio_no_google(arroba, api_serper):
 # ==========================================
 def botao_copiar_e_abrir_dm(username, script):
     """
-    Renderiza um link <a> custom que:
+    Renderiza um link <a> custom que ao clicar:
     1. Copia o script pro clipboard (via execCommand, funciona em iframe)
-    2. Abre a DM direto no Instagram (via ig.me/m/username) — como link <a target="_blank"> não é bloqueado como popup
+    2. Abre o PERFIL do Instagram numa nova aba (via window.open)
+    3. Abre a DM direto (via link <a target="_blank">, não é bloqueado)
     """
-    # ID único pra evitar colisão (usernames podem ter caracteres estranhos)
     uid = re.sub(r'[^a-zA-Z0-9]', '', username)
-    
-    # Escapa o script pra segurança no JS
     script_safe = json.dumps(script if script else "")
     
     html_botao = f"""
@@ -384,7 +382,7 @@ def botao_copiar_e_abrir_dm(username, script):
            href="https://ig.me/m/{username}" 
            target="_blank" 
            rel="noopener noreferrer"
-           onclick="copiarScript_{uid}(event)"
+           onclick="copiarEAbrirTudo_{uid}(event)"
             style="
                 display: flex;
                 align-items: center;
@@ -395,7 +393,7 @@ def botao_copiar_e_abrir_dm(username, script):
                 border: none;
                 border-radius: 8px;
                 padding: 8px 12px;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 600;
                 cursor: pointer;
                 font-family: 'Source Sans Pro', sans-serif;
@@ -403,22 +401,24 @@ def botao_copiar_e_abrir_dm(username, script):
                 text-decoration: none !important;
                 box-sizing: border-box;
                 transition: all 0.2s;
+                line-height: 1.2;
+                text-align: center;
             "
             onmouseover="this.style.backgroundColor='#E03C3C'"
             onmouseout="this.style.backgroundColor='#FF4B4B'"
         >
-            📋 Copiar + Abrir DM
+            📋 Copiar + Perfil + DM
         </a>
         <textarea id="ta_{uid}" style="position:absolute; left:-9999px; top:-9999px;">{script if script else ""}</textarea>
     </div>
     
     <script>
-    function copiarScript_{uid}(event) {{
+    function copiarEAbrirTudo_{uid}(event) {{
         const btn = document.getElementById('btn_dm_{uid}');
         const ta = document.getElementById('ta_{uid}');
         
+        // PASSO 1: Copiar pro clipboard
         try {{
-            // Método 1: textarea + execCommand (funciona dentro de iframe)
             ta.style.left = '0';
             ta.style.top = '0';
             ta.focus();
@@ -428,30 +428,36 @@ def botao_copiar_e_abrir_dm(username, script):
             ta.style.left = '-9999px';
             ta.style.top = '-9999px';
             
-            // Tenta também o clipboard moderno como bônus
             if (navigator.clipboard) {{
                 navigator.clipboard.writeText({script_safe}).catch(function() {{}});
             }}
             
             if (sucesso) {{
-                btn.innerHTML = '✅ Copiado! Abrindo DM...';
+                btn.innerHTML = '✅ Copiado! Abrindo...';
                 btn.style.backgroundColor = '#28a745';
             }} else {{
-                btn.innerHTML = '⚠️ Abrindo DM (copie manual)';
+                btn.innerHTML = '⚠️ Abrindo (copie manual)';
                 btn.style.backgroundColor = '#ffc107';
             }}
         }} catch (err) {{
-            btn.innerHTML = '⚠️ Abrindo DM (copie manual)';
+            btn.innerHTML = '⚠️ Abrindo (copie manual)';
             btn.style.backgroundColor = '#ffc107';
         }}
         
-        // Volta o botão ao normal depois de 2.5s
+        // PASSO 2: Abrir o PERFIL via window.open (segunda aba)
+        // O link <a target="_blank"> abre a DM naturalmente — não precisa preventDefault
+        try {{
+            window.open('https://www.instagram.com/{username}/', '_blank', 'noopener,noreferrer');
+        }} catch (err) {{
+            console.error('Falha ao abrir perfil:', err);
+        }}
+        
+        // Reset visual depois de 2.5s
         setTimeout(function() {{
-            btn.innerHTML = '📋 Copiar + Abrir DM';
+            btn.innerHTML = '📋 Copiar + Perfil + DM';
             btn.style.backgroundColor = '#FF4B4B';
         }}, 2500);
         
-        // NÃO chama event.preventDefault() — deixa o link <a> abrir naturalmente
         return true;
     }}
     </script>
