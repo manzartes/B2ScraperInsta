@@ -118,7 +118,7 @@ with col_botoes:
     st.link_button("🕸️ B2Scraper Web", "https://b2scraperweb.streamlit.app/", use_container_width=True)
 
 # ==========================================
-# ⚙️ MENU LATERAL ORGANIZADO
+# ⚙️ MENU LATERAL ORGANIZADO (GAVETAS)
 # ==========================================
 with st.sidebar:
     st.header("⚙️ Painel de Controle")
@@ -133,6 +133,27 @@ with st.sidebar:
         st.session_state["url_webhook"] = url_webhook
         st.session_state["nome_aba"] = nome_aba
 
+    with st.expander("🧠 Regras de Qualificação (ICP)", expanded=False):
+        st.markdown("**Defina quem a IA deve Aprovar ou Reprovar:**")
+        st.session_state["regras_icp"] = st.text_area("Instruções de ICP:", 
+                                                     value=st.session_state["regras_icp"], height=200)
+
+    with st.expander("📝 Script de Abordagem", expanded=False):
+        st.markdown("**Personalize sua mensagem de saída:**")
+        st.session_state["script_customizado"] = st.text_area("Template de Script (Use [PRONOME_E_NOME], [ÁREA X], [ESPECIALIDADE]):", 
+                                                             value=st.session_state["script_customizado"], height=300)
+
+    with st.expander("👤 Seu Perfil e API", expanded=False):
+        seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
+        anos_exp = st.text_input("Anos de Experiência:", value="5")
+        pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr.")
+        st.session_state["pronome_lead"] = pronome_lead
+        st.divider()
+        api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state.get("api_key_serper", CHAVE_SERPER_PADRAO))
+        api_key_gemini = st.text_input("API Key do Gemini:", type="password", value=st.session_state.get("api_key_gemini", CHAVE_GEMINI_PADRAO))
+        st.session_state["api_key_serper"] = api_key_serper
+        st.session_state["api_key_gemini"] = api_key_gemini
+
     with st.expander("🚫 Gerenciar Blacklist", expanded=False):
         if "aba_blacklist" not in st.session_state:
             st.session_state["aba_blacklist"] = "BLACKLIST"
@@ -140,28 +161,6 @@ with st.sidebar:
         st.session_state["aba_blacklist"] = aba_blacklist
         blacklist_texto = st.text_area("Colar arrobas manuais:", height=60, placeholder="@joao")
         blacklist_manual = {a.strip().replace("https://www.instagram.com/", "@").replace("/", "") for a in blacklist_texto.split("\n") if a.strip()}
-
-    with st.expander("🔑 Chaves de API", expanded=False):
-        api_key_serper = st.text_input("API Key do Serper:", type="password", value=st.session_state.get("api_key_serper", CHAVE_SERPER_PADRAO))
-        api_key_gemini = st.text_input("API Key do Gemini:", type="password", value=st.session_state.get("api_key_gemini", CHAVE_GEMINI_PADRAO))
-        st.session_state["api_key_serper"] = api_key_serper
-        st.session_state["api_key_gemini"] = api_key_gemini
-
-    with st.expander("👤 Seu Perfil e Abordagem", expanded=False):
-        seu_nome = st.text_input("Seu Nome:", value="Henrique Durant")
-        anos_exp = st.text_input("Anos de Experiência:", value="5")
-        pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr.")
-        st.session_state["pronome_lead"] = pronome_lead
-        
-        st.markdown("---")
-        st.markdown("**🎯 Regras de Qualificação (ICP):**")
-        st.session_state["regras_icp"] = st.text_area("Defina quem a IA deve Aprovar ou Reprovar:", 
-                                                     value=st.session_state["regras_icp"], height=150)
-
-        st.markdown("---")
-        st.markdown("**📝 Script de Abordagem Personalizado:**")
-        st.session_state["script_customizado"] = st.text_area("Edite seu script (Use [PRONOME_E_NOME], [ÁREA X], [ESPECIALIDADE]):", 
-                                                             value=st.session_state["script_customizado"], height=300)
         
     st.divider()
     st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
@@ -230,7 +229,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
         time.sleep(0.4)
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (FIXADO GEMINI 2.5 FLASH + REGRAS DINÂMICAS) ---
+# --- CÉREBRO DA IA (GEMINI 2.5 FLASH + REGRAS DINÂMICAS) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr, pronome_lead):
     try:
         genai.configure(api_key=api_gemini)
@@ -245,13 +244,13 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
             treinamento += f"\n\n🚨 REPROVADOS PELO USUÁRIO:\n- {maus}"
             
         script_base = st.session_state["script_customizado"]
-        icp_dinamico = st.session_state["regras_icp"] # <--- PUXANDO DO MENU LATERAL
+        icp_regras = st.session_state["regras_icp"]
             
         prompt = f"""
-        Atue como {nome_bdr}, BDR especialista. Analise o lead de High-Ticket.
+        Atue como {nome_bdr}, BDR especialista. Analise o lead abaixo.
         
-        REGRAS DE QUALIFICAÇÃO (ICP) DEFINIDAS PELO USUÁRIO:
-        {icp_dinamico}
+        REGRAS DE ICP E QUALIFICAÇÃO DEFINIDAS PELO USUÁRIO:
+        {icp_regras}
 
         {treinamento}
 
