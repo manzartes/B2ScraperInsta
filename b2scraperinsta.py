@@ -270,7 +270,8 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr, pronome_lead):
     try:
         genai.configure(api_key=api_gemini)
-        modelos_disponiveis = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        # FORÇANDO O MODELO 2.5 FLASH (O que tem 1k de RPM no seu print)
+        modelo = genai.GenerativeModel('gemini-2.5-flash')
         
         if not modelos_disponiveis:
             return {"status": "ERRO", "motivo": "Sem acesso à IA."}
