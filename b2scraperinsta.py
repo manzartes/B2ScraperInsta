@@ -51,6 +51,11 @@ if "maus_exemplos" not in st.session_state:
 if "feedbacks_dados" not in st.session_state:
     st.session_state["feedbacks_dados"] = [] 
 
+# --- REGRAS DE ICP PADRÃO ---
+if "regras_icp" not in st.session_state:
+    st.session_state["regras_icp"] = """ICP: Donos de empresas, Profissionais liberais, Médicos, Advogados, Consultores.
+CRITÉRIOS: Reprovar perfis privados, amadores (sem camisa), ou com > 50k seguidores."""
+
 # --- SCRIPT DE MENSAGEM PADRÃO ---
 if "script_customizado" not in st.session_state:
     st.session_state["script_customizado"] = """Olá, [PRONOME_E_NOME]. Tudo bem?
@@ -148,12 +153,17 @@ with st.sidebar:
         pronome_lead = st.text_input("Pronome do Lead (Opcional):", placeholder="Ex: Dr.")
         st.session_state["pronome_lead"] = pronome_lead
         
-        st.markdown("**Script de Abordagem Personalizado:**")
+        st.markdown("---")
+        st.markdown("**🎯 Regras de Qualificação (ICP):**")
+        st.session_state["regras_icp"] = st.text_area("Defina quem a IA deve Aprovar ou Reprovar:", 
+                                                     value=st.session_state["regras_icp"], height=150)
+
+        st.markdown("---")
+        st.markdown("**📝 Script de Abordagem Personalizado:**")
         st.session_state["script_customizado"] = st.text_area("Edite seu script (Use [PRONOME_E_NOME], [ÁREA X], [ESPECIALIDADE]):", 
                                                              value=st.session_state["script_customizado"], height=300)
         
     st.divider()
-    # CORREÇÃO AQUI: Mudado de 'bons_examples' para 'bons_exemplos' para bater com a inicialização
     st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_exemplos'])} dislikes.")
 
 # --- ENVIAR PARA GOOGLE SHEETS ---
@@ -194,7 +204,6 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
     palavras_ignoradas = ['p', 'reel', 'reels', 'explore', 'tags', 'stories', 'tv', 'channel', 'about', 'legal', 'directory']
     blacklist_total = st.session_state["blacklist_arrobas"].union(blacklist_manual).union(puxar_blacklist_automatica())
     
-    # Busca profunda para garantir a quantidade
     limite_paginas = 20
     ultima_pagina_pesquisada = pagina_inicial
     
@@ -221,7 +230,7 @@ def garimpar_perfis_google(profissao, hashtag, localizacao, termos_negativos, fr
         time.sleep(0.4)
     return arrobas_encontrados[:qtd], ultima_pagina_pesquisada + 1
 
-# --- CÉREBRO DA IA (GEMINI 2.5 FLASH + SCRIPT DINÂMICO) ---
+# --- CÉREBRO DA IA (FIXADO GEMINI 2.5 FLASH + REGRAS DINÂMICAS) ---
 def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bdr, pronome_lead):
     try:
         genai.configure(api_key=api_gemini)
@@ -236,12 +245,14 @@ def analisar_e_gerar_script(arroba, snippet_google, api_gemini, nome_bdr, exp_bd
             treinamento += f"\n\n🚨 REPROVADOS PELO USUÁRIO:\n- {maus}"
             
         script_base = st.session_state["script_customizado"]
+        icp_dinamico = st.session_state["regras_icp"] # <--- PUXANDO DO MENU LATERAL
             
         prompt = f"""
         Atue como {nome_bdr}, BDR especialista. Analise o lead de High-Ticket.
-        ICP: Donos de empresas, Profissionais liberais, Médicos, Advogados, Consultores.
+        
+        REGRAS DE QUALIFICAÇÃO (ICP) DEFINIDAS PELO USUÁRIO:
+        {icp_dinamico}
 
-        CRITÉRIOS: Reprovar perfis privados, amadores (sem camisa), ou com > 50k seguidores.
         {treinamento}
 
         Resumo do Google para {arroba}: "{snippet_google}"
