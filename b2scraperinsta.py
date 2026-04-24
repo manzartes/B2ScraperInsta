@@ -157,7 +157,7 @@ with st.sidebar:
                                                              value=st.session_state["script_customizado"], height=300)
         
     st.divider()
-    st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_examples'])} likes / {len(st.session_state['maus_examples'])} dislikes.")
+    st.caption(f"🧠 IA possui na memória: {len(st.session_state['bons_exemplos'])} likes / {len(st.session_state['maus_examples'])} dislikes.")
 
 # --- ENVIAR PARA GOOGLE SHEETS ---
 def enviar_lead_para_planilha(lead_dados):
