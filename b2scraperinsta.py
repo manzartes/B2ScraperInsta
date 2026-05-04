@@ -58,16 +58,7 @@ CRITÉRIOS: Reprovar perfis privados, amadores (sem camisa), ou com > 50k seguid
 
 # --- SCRIPT DE MENSAGEM PADRÃO ---
 if "script_customizado" not in st.session_state:
-    st.session_state["script_customizado"] = """Olá, [PRONOME_E_NOME]. Tudo bem?
-Espero que sim.
-
-Aqui é o [SEU_NOME], muito prazer. Eu trabalho há mais de [ANOS_EXP] anos ajudando empresários a serem percebidos como autoridade, conseguirem vender mais, cobrando melhor e com maior lucro.
-
-Me deparei com seu perfil e gostei muito do conteúdo que você gera sobre [ÁREA X], principalmente do seu foco em [ESPECIALIDADE].
-
-Vi que o seu perfil tem várias semelhanças com profissionais que atendo, mas também percebi alguns pontos que podem estar limitando a forma como o mercado te enxerga — e isso normalmente impacta diretamente no quanto você consegue cobrar e nas oportunidades que chegam até você.
-
-Posso compartilhar essas observações?"""
+    st.session_state["script_customizado"] = """Oi [PRONOME_E_NOME], tudo bem?"""
 
 # --- FUNÇÕES DE MEMÓRIA PERMANENTE ---
 def puxar_memoria_ia():
