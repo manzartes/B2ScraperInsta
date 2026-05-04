@@ -127,7 +127,7 @@ with st.sidebar:
         if "url_webhook" not in st.session_state:
             st.session_state["url_webhook"] = URL_WEBHOOK_PLANILHA
         if "nome_aba" not in st.session_state:
-            st.session_state["nome_aba"] = "ABRIL/26"
+            st.session_state["nome_aba"] = "MAIO/26"
         url_webhook = st.text_input("URL do Webhook:", type="password", value=st.session_state["url_webhook"])
         nome_aba = st.text_input("Aba de Entrada (CRM):", value=st.session_state["nome_aba"])
         st.session_state["url_webhook"] = url_webhook
